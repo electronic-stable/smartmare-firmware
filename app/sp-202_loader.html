@@ -1,0 +1,278 @@
+<!doctype html>
+<!--
+  SmartMare 5V - SP-202 loader: pads, sample sets and backup bank over USB
+
+  Fabien Roffet for Electronic Stable - smartmare.com
+  Version 1.0.0 - 2 Nov 2026
+  SPDX-License-Identifier: MIT
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartMare : Pad Editor v.1.0</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="unit">
+
+  <header class="plate">
+    <div class="brand">
+      <div class="brand-main">SMARTMARE : <span>PAD EDITOR</span> <small>v.1.0</small></div>
+      <div class="brand-sub">Electronic Stable · for the Dr. Sample SP-202</div>
+    </div>
+
+    <div class="display-wrap">
+      <div class="display" id="display" aria-live="polite"></div>
+      <div class="display-label" id="display-label">READY</div>
+    </div>
+
+    <div class="leds">
+      <div class="led-item"><span class="led" id="led-usb"></span>USB</div>
+      <div class="led-item"><span class="led" id="led-power"></span>SP-202</div>
+      <div class="led-item"><span class="led" id="led-health"></span>BUS</div>
+    </div>
+  </header>
+
+  <!-- CARD -->
+  <section class="sec" id="sec-card">
+    <header class="sec-head"><span class="sec-num"></span><h2>CARD</h2>
+      <p>Connect the card over USB, read it, write your changes. The SP-202 must be off.</p></header>
+    <div class="sec-body">
+      <div class="btn-row">
+        <button class="key" id="btn-connect"><span class="key-led"></span>CONNECT</button>
+        <button class="key" id="btn-read" disabled><span class="key-led"></span>READ CARD</button>
+        <button class="key key-rec" id="btn-write" disabled><span class="key-led"></span>WRITE CARD <b id="write-count"></b></button>
+      </div>
+      <div class="card-status" id="card-status">Not connected.</div>
+      <details class="checks-box" id="checks-box">
+        <summary>Checks <span id="checks-sum"></span></summary>
+        <ul id="checks"></ul>
+      </details>
+    </div>
+  </section>
+
+  <!-- SAMPLE SET -->
+  <section class="sec" id="sec-project">
+    <header class="sec-head"><span class="sec-num"></span><h2>SAMPLE SET</h2>
+      <p>All your pads under one name (Drum Kit 01, Sample Pack…): banks C/D, the backup bank and the audio files waiting on pads.</p></header>
+    <div class="sec-body">
+      <div class="proj-name-row">
+        <input id="proj-name" value="my_sample_set" maxlength="40" spellcheck="false" aria-label="Sample set name">
+        <span class="proj-state" id="proj-state"></span>
+      </div>
+      <div class="btn-row">
+        <button class="key small" id="btn-proj-open" title="The sample sets kept on the card">LOAD SETS…</button>
+        <button class="key small key-rec" id="btn-set-card" disabled title="Keep this sample set on the SmartMare card (SP-202 off)">SAVE SET TO CARD</button>
+      </div>
+      <input type="file" id="file-open" accept=".img,.bin" hidden>
+      <input type="file" id="file-pad" accept=".sp202pad,.wav,.aif,.aiff,.mp3,.flac,.ogg,audio/*" hidden>
+    </div>
+  </section>
+
+  <div class="row row-pads">
+    <!-- PADS -->
+    <section class="sec" id="sec-pads">
+      <header class="sec-head"><span class="sec-num"></span><h2>PADS</h2>
+        <p>Click a pad or press 1–8 to select and play it. Drag a pad onto another to copy it. Drop audio files on pads.</p></header>
+      <div class="sec-body">
+        <div class="bank-bar">
+          <div class="bank-group">
+            <div class="silk">INTERNAL · via BACKUP</div>
+            <div class="bank-row">
+              <button class="bank" data-bank="A"><span class="key-led"></span>A</button>
+              <button class="bank" data-bank="B"><span class="key-led"></span>B</button>
+            </div>
+          </div>
+          <div class="bank-group">
+            <div class="silk">CARD</div>
+            <div class="bank-row">
+              <button class="bank" data-bank="C"><span class="key-led"></span>C</button>
+              <button class="bank" data-bank="D"><span class="key-led"></span>D</button>
+            </div>
+          </div>
+          <div class="memory">
+            <div class="silk">MEMORY <span id="mem-text"></span></div>
+            <div class="meter"><div id="mem-bar"></div></div>
+          </div>
+        </div>
+        <div class="pads" id="pads"></div>
+        <div class="pads-note" id="pads-note"></div>
+      </div>
+    </section>
+
+    <!-- PAD -->
+    <section class="sec detail" id="detail">
+      <header class="sec-head"><span class="sec-num"></span><h2 id="detail-title">PAD</h2>
+        <p>What the SP-202 keeps for this pad.</p></header>
+      <div class="sec-body">
+        <div id="detail-body" class="detail-body"></div>
+        <div class="detail-actions">
+          <button class="key small" id="btn-export" disabled>EXPORT PAD</button>
+          <button class="key small" id="btn-import" disabled>IMPORT…</button>
+          <button class="key small" id="btn-wav" disabled title="The pad's sound as a WAV file">EXPORT WAV</button>
+          <button class="key small danger" id="btn-clear" disabled>CLEAR PAD</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SOUND EDITOR -->
+  <section class="sec" id="sec-editor">
+    <header class="sec-head"><span class="sec-num"></span><h2>SOUND EDITOR</h2>
+      <p>Drag the S and E flags to set where the pad starts and ends. Wheel to zoom, drag to scroll.</p></header>
+    <div class="sec-body editor" id="editor">
+      <div class="lcd">
+        <div class="lcd-top"><span class="lcd-title">TRIM</span><span class="lcd-play"></span></div>
+        <canvas class="lcd-wave"></canvas>
+        <div class="lcd-fields"></div>
+      </div>
+      <div class="ed-controls">
+        <div class="ed-group"><div class="silk">PLAY</div>
+          <button class="key small" data-ed="play" title="The whole sample">▶ ALL</button>
+          <button class="key small" data-ed="playsel" title="From START to END">▶ S–E</button>
+          <button class="key small" data-ed="loop"><span class="key-led"></span>LOOP</button>
+          <button class="key small" data-ed="stop">■</button>
+        </div>
+        <div class="ed-group"><div class="silk">START</div>
+          <button class="key small" data-ed="s-" title="Shift: fine">◀</button>
+          <button class="key small" data-ed="s+" title="Shift: fine">▶</button>
+        </div>
+        <div class="ed-group"><div class="silk">END</div>
+          <button class="key small" data-ed="e-" title="Shift: fine">◀</button>
+          <button class="key small" data-ed="e+" title="Shift: fine">▶</button>
+        </div>
+        <div class="ed-group"><div class="silk">ZOOM</div>
+          <button class="key small" data-ed="zout">−</button>
+          <button class="key small" data-ed="zin">+</button>
+          <button class="key small" data-ed="zsel">S–E</button>
+          <button class="key small" data-ed="zfit">ALL</button>
+        </div>
+        <div class="ed-group"><div class="silk">GRADE</div>
+          <select class="grade-sel">
+            <option value="0">HI-FI 31.25 kHz</option><option value="1">STANDARD 15.63 kHz</option>
+            <option value="2">LO-FI 1 7.81 kHz</option><option value="3">LO-FI 2 3.91 kHz</option>
+          </select>
+          <button class="key small" data-ed="preview" title="Plays START–END at the grade's rate">▶ AS SP-202</button>
+        </div>
+        <div class="ed-group"><div class="silk">FILE</div>
+          <button class="key small key-rec" data-ed="load">LOAD TO PAD</button>
+          <button class="key small" data-ed="savewav" title="START–END at the grade's rate, as a WAV file">SAVE WAV</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BACKUP BANK -->
+  <section class="sec" id="sec-backup">
+    <header class="sec-head"><span class="sec-num"></span><h2>BACKUP BANK</h2>
+      <p>The SP-202's own BACKUP: banks A/B, kept inside the SP-202, copied to the card and back.</p></header>
+    <div class="sec-body">
+      <div class="backup-status" id="backup-status"></div>
+      <ol class="steps">
+        <li><b>SAVE on the SP-202</b> (internal → card): hold <kbd>CANCEL</kbd>, press <kbd>BANK CARD C/D</kbd>, pad <kbd>1</kbd>, then <kbd>REC</kbd>. Wait until REC goes off.</li>
+        <li><b>Edit A/B here</b>: READ CARD, show bank A or B, copy pads into it, WRITE CARD.</li>
+        <li><b>LOAD on the SP-202</b> (card → internal, replaces all of A/B): hold <kbd>CANCEL</kbd>, press <kbd>BANK INT A/B</kbd>, pad <kbd>1</kbd>, then <kbd>REC</kbd>.</li>
+      </ol>
+      <div class="btn-row">
+        <button class="key small" id="btn-bk-a">SHOW BANK A</button>
+        <button class="key small" id="btn-bk-b">SHOW BANK B</button>
+        <button class="key small" id="btn-bk-export" disabled>EXPORT BACKUP</button>
+        <button class="key small" id="btn-bk-import" disabled>IMPORT BACKUP</button>
+        <input type="file" id="file-backup" accept=".sp202bak" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- BACKUP CARD -->
+  <section class="sec" id="sec-backup-card">
+    <header class="sec-head"><span class="sec-num"></span><h2>BACKUP CARD</h2>
+      <p>Optional: a copy of the whole card (.img: banks C/D, the backup bank, everything) to keep or to put back.</p></header>
+    <div class="sec-body">
+      <div class="btn-row">
+        <button class="key small" id="btn-save" disabled title="Save the whole card as a .img file">SAVE CARD BACKUP</button>
+        <button class="key small" id="btn-open" title="Open a .img file; then WRITE CARD puts it back">OPEN CARD BACKUP</button>
+        <button class="key small" id="btn-revert" disabled title="Back to what the card holds">UNDO ALL</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD TOOLS -->
+  <section class="sec" id="sec-tools">
+    <header class="sec-head"><span class="sec-num"></span><h2>CARD TOOLS</h2>
+      <p>Update the card's firmware, or erase the whole card. The SP-202 must be off.</p></header>
+    <div class="sec-body tools">
+      <div class="tool">
+        <div class="sub-head first">FIRMWARE UPDATE</div>
+        <p class="hint">Your pads and sample sets stay on the card. The SP-202 must be off.<br>
+          1. CHOOSE the new firmware (a .uf2 file). 2. CONNECT, then UPDATE: the card restarts in update
+          mode and shows as a drive named RP2350. 3. COPY TO RP2350 and pick that drive: the card takes the
+          new firmware and restarts with it. Then CONNECT again.</p>
+        <div class="btn-row">
+          <button class="key small" id="btn-fw-file">CHOOSE .UF2…</button>
+          <span class="fw-file" id="fw-file">no file chosen</span>
+          <button class="key small key-rec" id="btn-fw-go" disabled>UPDATE</button>
+          <button class="key small" id="btn-fw-copy" hidden>COPY TO RP2350…</button>
+        </div>
+        <div class="fw-status" id="fw-status"></div>
+        <input type="file" id="file-fw" accept=".uf2" hidden>
+      </div>
+      <div class="tool">
+        <div class="sub-head first">ERASE THE CARD</div>
+        <p class="hint">A blank card: the pads of banks C/D, the BACKUP of banks A/B and every sample set are erased.
+          Save what you want to keep first. Then format the card on the SP-202.</p>
+        <div class="btn-row">
+          <button class="key small danger" id="btn-erase-all" disabled>ERASE CARD…</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section class="sec" id="sec-log">
+    <header class="sec-head"><span class="sec-num"></span><h2>LIVE LOG</h2>
+      <p>Everything the card says.</p>
+      <span class="log-tools">
+        <button class="key tiny" id="btn-status" disabled>STATUS</button>
+        <button class="key tiny" id="btn-loglevel" disabled>FW LOG: QUIET</button>
+        <label><input type="checkbox" id="log-scroll" checked> follow</label>
+        <button class="key tiny" id="btn-logclear">CLEAR</button>
+      </span></header>
+    <div id="log" class="log-body" role="log"></div>
+  </section>
+
+  <footer class="foot">SmartMare by Electronic Stable. Not affiliated with Roland or BOSS.</footer>
+</div>
+
+<div class="dropzone" id="dropzone"><div>Drop a <b>.smartmare</b> sample set or a <b>.img</b> card backup to open it · audio files and <b>.sp202pad</b> on a pad</div></div>
+
+<dialog id="projects">
+  <h2>LOAD A SAMPLE SET</h2>
+  <p class="hint">The sample sets kept on the card. Open one, then press WRITE CARD to put its pads on the card.
+    They are also files in the Sample Sets folder of the SMARTMARE drive: copy them to your computer to keep them, drop one on this page to open it.</p>
+  <div class="sub-head first">ON THE CARD <span id="set-card-free"></span></div>
+  <div id="set-card-list" class="proj-list"></div>
+  <menu><button class="key small" id="proj-close">CLOSE</button></menu>
+</dialog>
+
+<dialog id="dialog">
+  <form method="dialog">
+    <h2 id="dlg-title"></h2>
+    <div id="dlg-body"></div>
+    <menu>
+      <button value="cancel" class="key small" id="dlg-cancel">CANCEL</button>
+      <button value="ok" class="key small key-rec" id="dlg-ok">OK</button>
+    </menu>
+  </form>
+</dialog>
+
+<script src="js/card.js"></script>
+<script src="js/serial.js"></script>
+<script src="js/segments.js"></script>
+<script src="js/codec.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/project.js"></script>
+<script src="js/firmware.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+; SmartMare 5V - SmartMedia bus PIO programs, card side
+;
+; Fabien Roffet for Electronic Stable - smartmare.com
+; Version 1.0.0 - 2 Nov 2026
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; SmartMedia bus, card side, on PIO0 (RP2350A, GPIO base 0).
+; GPIO numbers are absolute and must match src/board_pins.h (checked in sm_bus.c):
+;   /RE = GPIO3, /CE = GPIO4, D0-D7 = GPIO8-15. /WE is GPIO18 on v0.2 and GPIO2 on v0.3: sm_bus.c
+;   patches the "wait 0 gpio 18" of sm_latch with the pin of the board it runs on.
+
+.pio_version 1
+
+.program sm_latch
+; Every /WE pulse: GPIO0-31 (CLE, /RE, /CE, /WP, D0-D7, ALE) are sampled over and over
+; while /WE is low, and the last sample before /WE rises is the one used: data is
+; guaranteed stable there (tDS 30 ns), while after the rise it may already be changing
+; (tDH is only 20 ns). Two words per pulse: that sample, then one taken just after the
+; rise (diagnosis: core1 counts the bytes where they differ).
+; The core decides from the sample: /CE high = ignored, CLE = command, ALE = address,
+; neither = data input.
+; A command also sets R/B busy at once (~50 ns): the SP-202 checks R/B about 1 us after
+; erase / program commands, before core1 has decoded them (the spec allows 200 ns, tWB).
+; Core1 releases R/B when the command does not keep the card busy.
+; jmp pin = /WE, SET pin = R/B control (GPIO6, high = busy), OSR shifts right.
+.wrap_target
+top:
+    wait 0 gpio 18
+low:
+    mov x, pins
+    jmp pin high
+    jmp low
+high:
+    in x, 32                 ; autopush: the last sample with /WE low
+    in pins, 32              ; autopush: just after the rise
+    mov osr, x
+    out y, 1                 ; CLE
+    jmp !y top
+    set pins, 1              ; a command: R/B busy
+.wrap
+
+.program sm_read
+; Each /RE low pulse while /CE is low: drive the next byte on D0-D7.
+; The byte is pulled and put on the output latch before /RE falls, while the pins are still
+; inputs, so the /RE path is only wait + jmp + mov pindirs (tREA 45 ns).
+; Nothing queued: the SM waits at the pull and does not drive; the host reads FF through
+; the pull-ups, as from a card with nothing to say.
+.wrap_target
+fetch:
+    pull block
+    out pins, 8
+idle:
+    wait 0 gpio 3
+    jmp pin not_me           ; jmp pin = /CE: high means the card is not selected
+    mov pindirs, ~null
+    wait 1 gpio 3
+    mov pindirs, null
+.wrap
+not_me:
+    wait 1 gpio 3
+    jmp idle
+
+.program sm_ce_guard
+; 3.3V card (contacts wired straight to the RP2350, no 8T245 or NOR gate): if the host raises /CE
+; while sm_read drives D0-D7 (/RE still low), let go within tCHZ (30 ns), as the NOR gate does in
+; hardware on the 5V card. Same OUT pins as sm_read; it must run on a higher-numbered SM, so that
+; it wins if both write the pin directions in the same cycle.
+.wrap_target
+    wait 0 gpio 4
+    wait 1 gpio 4
+    mov pindirs, null
+.wrap
+
+.program sm_re_probe
+; Diagnosis: on every /RE low pulse, sample GPIO0-29 ~60 ns after /RE falls (once sm_read
+; drives D0-D7), then count how long /RE stays low. Pushes two words per pulse: the sample
+; (bits 30-31 always 0) and x, which counts down from all ones (bits 30-31 always 1): core1
+; tells them apart by those bits on any board (v0.2 used /WE on GPIO18, which v0.3 moved to
+; GPIO2). The loop count n = ~x, with /RE low time ~= (11 + 2n) cycles. jmp pin = /RE.
+.wrap_target
+    mov x, ~null
+    wait 0 gpio 3
+    mov isr, null [7]        ; ~60 ns, and an empty ISR for the 30-bit sample
+    in pins, 30
+    push noblock
+count:
+    jmp pin done
+    jmp x-- count
+done:
+    mov isr, x
+    push noblock
+.wrap
