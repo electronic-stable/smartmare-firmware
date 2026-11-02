@@ -5,6 +5,25 @@ SmartMedia memory cards for vintage samplers and other gear, with an RP2350A mic
 flash memory instead of the original chips, and USB-C to manage them from a computer.
 More: [smartmare.com](https://smartmare.com).
 
+## Get a SmartMare
+The cards are **for sale**, assembled and tested, with the firmware already on them:
+**[smartmare.com](https://smartmare.com)**. They give vintage Roland, BOSS and other SmartMedia gear
+new and modern features:
+
+- **No more hunting for rare, worn-out cards:** a new card, made today, that your gear takes
+  as its own.
+- **USB-C to your computer:** the card shows up as a drive with its own editor page; no
+  software to install, it runs in Chrome or Edge.
+- **Back up and restore** the whole card from the editor page, and keep as many copies as you like.
+- **On the SP-202:** see and edit your pads, copy them between banks, drop your own audio
+  files on pads, trim and loop them, and keep whole sample sets on the card itself.
+- **Firmware updates** from the editor page: new features without opening anything.
+- **Open source:** read it, change it, build it yourself (below).
+
+SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland Corporation.
+SmartMare and Electronic Stable are not affiliated with them.
+
+## Versions
 The version is set in `CMakeLists.txt` (`project(... VERSION 1.0.0 ...)`), is part of each
 firmware's file name, and is shown on the card's USB serial port when it starts.
 
