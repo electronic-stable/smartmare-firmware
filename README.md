@@ -1,22 +1,29 @@
 # SmartMare firmware
 
-Firmware and web loaders for **SmartMare 5V**, by Electronic Stable: a card for 5 V SmartMedia
-slots that emulates a 4 MB SmartMedia card (an RP2350A microcontroller and a 16 MB flash
-instead of the original memory). More: [smartmare.com](https://smartmare.com).
+Firmware and web loaders for the **SmartMare** cards, by Electronic Stable: cards that emulate
+SmartMedia memory cards for vintage samplers and other gear, with an RP2350A microcontroller and
+flash memory instead of the original chips, and USB-C to manage them from a computer.
+More: [smartmare.com](https://smartmare.com).
 
-Two firmwares, for the same card:
+The version is set in `CMakeLists.txt` (`project(... VERSION 1.0.0 ...)`), is part of each
+firmware's file name, and is shown on the card's USB serial port when it starts.
+
+## SmartMare 5V
+A 4 MB 5 V SmartMedia card. Two firmwares, for the same card:
 
 | Firmware | For | Loader page on the card's USB drive |
 |---|---|---|
 | `smartmedia_5v_sp-202_v<version>.uf2` | the BOSS SP-202: pads, sample sets, backup bank | `app/sp-202_loader.html` |
 | `smartmedia_5v_generic_v<version>.uf2` | any gear with a 5 V 4 MB SmartMedia slot | `app/generic_loader.html` |
 
-The version is set in `CMakeLists.txt` (`project(... VERSION 1.0.0 ...)`) and shown on the
-card's USB serial port when it starts.
+## SmartMare 3.3V
+A 16 MB 3.3 V SmartMedia card, for the BOSS SP-303 and other 3.3 V gear. **Coming soon:** the
+board is designed, its firmware is not in this repository yet. It will follow the same names
+(`smartmedia_3v3_..._v<version>.uf2`).
 
 ## What is here
 - `src/` — the firmware: SmartMedia command set, the bus (PIO + DMA), the image in flash, USB.
-- `boards/` — the board definition for the Pico SDK (RP2350A, 12 MHz crystal, 16 MB flash).
+- `boards/` — the board definition for the Pico SDK (RP2350A, 12 MHz crystal, 16 MB flash; SmartMare 5V).
 - `app/` — the loader pages. The build packs them into the firmware (`tools/build_drive.py`),
   so the card shows them on a small read-only USB drive.
 - `tests/` — a simulated SmartMedia host, used by the self-test firmware.
@@ -43,8 +50,8 @@ The firmwares land in `build/`:
 
 | File | What it is |
 |---|---|
-| `smartmedia_5v_sp-202_v<version>.uf2` | SP-202 firmware |
-| `smartmedia_5v_generic_v<version>.uf2` | generic firmware |
+| `smartmedia_5v_sp-202_v<version>.uf2` | SmartMare 5V, SP-202 firmware |
+| `smartmedia_5v_generic_v<version>.uf2` | SmartMare 5V, generic firmware |
 | `smartmedia_selftest.uf2` | self test: checks the card against a simulated host. **It overwrites the card's memory**; load a normal firmware afterwards |
 | `smartmedia_bringup.uf2` | first power-on checks of a new board |
 
