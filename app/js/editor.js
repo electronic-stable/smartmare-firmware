@@ -2,7 +2,7 @@
  * SmartMare 5V - sound editor: waveform, start and stop points, zoom and preview
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.2 - 4 Nov 2026
+ * Version 1.2.7 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The trim screen: an MPC-style LCD with the waveform, START / END flags, zoom, and the
@@ -149,7 +149,8 @@ class WaveEditor {
 
   // source: {kind:"audio"|"marks"|"none", title, info, total, start, end, rate?, data?, grade, editable}
   load(src) {
-    Audio202.stop();
+    const p = Audio202.position();
+    if (!p || !p.pad || p.pad !== (src.padName || src.pad)) Audio202.stop();   // the pad just pressed keeps playing
     this.src = src;
     this.view = [0, Math.max(1, src.total || 1)];
     this.renderFields();
@@ -262,7 +263,7 @@ class WaveEditor {
     b.forEach(x => {
       const a = x.dataset.ed;
       const needs = a === "preview" ? (s.kind === "audio" || s.kind === "marks") && !!s.data
-        : a === "load" ? s.kind === "audio" || (s.kind === "marks" && !!s.data)   // also after TRUNCATE, PLAY, MODE
+        : a === "load" ? s.kind === "audio" || (s.kind === "marks" && !!s.data && this.changed(s))
         : a === "truncate" ? s.kind === "marks" && (s.start > 0 || s.end < s.total)
         : ["play", "playsel", "savewav"].includes(a) ? !!s.data : true;
       x.disabled = !needs || (!s.editable && /^(s|e)[-+]/.test(a));
@@ -274,6 +275,12 @@ class WaveEditor {
     });
     this.root.querySelector('[data-ed="load"]').title =
       "Puts START–STOP on the pad at the chosen quality and channels; the rest is cut and its memory freed (then WRITE CARD)";
+  }
+
+  // A card pad differs from what it holds: other marks, quality or channels.
+  changed(s) {
+    return s.grade !== s.origGrade || (s.wantStereo ?? s.stereo) !== s.stereo
+      || (s.was && (s.start !== s.was.start || s.end !== s.was.end)) || !!this.toConfirm?.(s.padName);
   }
 
   // ---------- editing ----------

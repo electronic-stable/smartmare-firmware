@@ -2,7 +2,7 @@
  * SmartMare 5V - 7-segment LED display
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.2 - 4 Nov 2026
+ * Version 1.2.7 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* A red 7-segment LED display, drawn in SVG. */

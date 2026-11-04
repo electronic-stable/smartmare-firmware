@@ -3,7 +3,7 @@
   SmartMare 5V - SP-202 loader: pads, sample sets and backup bank over USB
 
   Fabien Roffet for Electronic Stable - smartmare.com
-  Version 1.2.2 - 4 Nov 2026
+  Version 1.2.7 - 4 Nov 2026
   SPDX-License-Identifier: MIT
 -->
 <html lang="en">
@@ -106,6 +106,7 @@
             <button class="key small act" id="btn-export" disabled title="The pad exactly as the SP-202 keeps it, sound and settings (.sp202pad)">EXPORT PAD</button>
             <button class="key small act" id="btn-import" disabled title="Puts an exported pad (.sp202pad) on this pad">IMPORT PAD…</button>
             <button class="key small act" id="btn-clear" disabled title="Deletes the pad's sample (then WRITE CARD)">CLEAR PAD</button>
+            <button class="key small act" id="btn-export-all" disabled title="Every pad of every bank, as a WAV file and a pad file, in one .zip">EXPORT ALL PADS</button>
           </div>
         </div>
       </div>
@@ -170,11 +171,7 @@
         <li><b>SP-202 → CARD</b> (save A/B on the card), on the SP-202: hold <kbd>CANCEL</kbd>, press <kbd>BANK CARD C/D</kbd>, pad <kbd>1</kbd>, then <kbd>REC</kbd>. Wait until REC goes off.</li>
         <li><b>CARD → SP-202</b> (put A/B back into the SP-202), on the SP-202: hold <kbd>CANCEL</kbd>, press <kbd>BANK INT A/B</kbd>, pad <kbd>1</kbd>, then <kbd>REC</kbd>. This replaces all of A/B inside the SP-202.</li>
       </ol>
-      <div class="btn-row">
-        <button class="key small act" id="btn-bk-export" disabled>EXPORT BACKUP</button>
-        <button class="key small act" id="btn-bk-import" disabled>IMPORT BACKUP</button>
-        <input type="file" id="file-backup" accept=".sp202bak" hidden>
-      </div>
+      <input type="file" id="file-backup" accept=".sp202bak" hidden>
     </div>
   </section>
 
@@ -197,6 +194,7 @@
         <div class="fw-status" id="update-info"></div>
         <div class="fw-status" id="fw-status"></div>
         <div class="btn-row">
+          <button class="key small act" id="btn-fw-check" title="Asks smartmare.com for the latest firmware">CHECK UPDATES</button>
           <button class="key small act" id="btn-fw-auto" disabled title="Gets the latest firmware from smartmare.com and installs it">AUTO UPDATE</button>
           <button class="key small act" id="btn-fw-file" disabled title="Installs a firmware file (.uf2) from your computer">MANUAL UPDATE</button>
           <button class="key small act" id="btn-fw-copy" hidden>COPY TO RP2350…</button>
@@ -237,7 +235,7 @@
 </div>
 
 <div class="pad-menu" id="pad-menu" hidden></div>
-<div class="wait" id="wait" hidden><div id="wait-text">Please wait…</div></div>
+<div class="wait-box" id="wait" hidden><div id="wait-text">Please wait…</div></div>
 <div class="dropzone" id="dropzone"><div>Drop a <b>.smartmare</b> sample set or a <b>.img</b> card image to open it · audio files and <b>.sp202pad</b> on a pad</div></div>
 
 <dialog id="projects">

@@ -2,7 +2,7 @@
  * SmartMare 5V - simulated SP-202 driving the real bus, for the self test
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.2 - 4 Nov 2026
+ * Version 1.2.7 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #ifndef SM_SIMHOST_H

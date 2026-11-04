@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 loader page: pads, trims, sample sets, card read and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.2 - 4 Nov 2026
+ * Version 1.2.7 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare SP-202 Card Manager: the page. Card model in card.js, USB in serial.js. */
@@ -81,8 +81,10 @@ function imageChecks() {
   const w = state.work;
   if (!w) { ["image", "ecc", "table", "backup"].forEach(id => check(id, "wait")); return; }
   const used = w.usedBlocks().length;
-  check("image", w.isFormatted() ? "ok" : "warn",
-        `${state.source}: ${used} blocks used` + (w.isFormatted() ? ", formatted by the SP-202" : ", not formatted by the SP-202 (format it there first)"));
+  const blank = !used;                         // erased: the first sample puts the SP-202's blank format on it
+  check("image", w.isFormatted() || blank ? "ok" : "warn",
+        blank ? `${state.source}: blank. The first sample formats it as the SP-202 does`
+        : `${state.source}: ${used} blocks used` + (w.isFormatted() ? ", formatted by the SP-202" : ", not formatted by the SP-202 (format it there first)"));
   const e = w.checkEcc();
   check("ecc", e.bad.length ? "fail" : "ok",
         e.bad.length ? `${e.bad.length} of ${e.checked} pages wrong (first: page ${e.bad[0]})` : `${e.checked} pages, all correct`);
@@ -90,14 +92,14 @@ function imageChecks() {
   if (card.present()) {
     const issues = card.check();
     check("table", issues.length ? "warn" : "ok", issues.length ? issues.join("; ") : `${card.used().length} pads used, samples packed`);
-  } else check("table", "warn", "no pad table");
+  } else check("table", blank ? "ok" : "warn", blank ? "none yet: made with the first sample" : "no pad table");
   const bk = new SM.Space(w, "backup");
   if (bk.present()) {
     const issues = bk.check();
     const areas = SM.backupAreas(w);
     check("backup", issues.length ? "warn" : "ok", issues.length ? issues.join("; ")
       : `present: backup${areas.length > 1 ? `s ${areas.join(", ")}` : " 1"} (pick one beside CARD BACKUP)`);
-  } else check("backup", "warn", "none on the card. On the SP-202: CANCEL + BANK CARD C/D, then REC, to save banks A/B here");
+  } else check("backup", blank ? "ok" : "warn", "none on the card. On the SP-202: CANCEL + BANK CARD C/D, then REC, to save banks A/B here");
 }
 
 // ---------- spaces and pads ----------
@@ -151,7 +153,7 @@ function renderPads() {
         names[n] = nameOf(sp, e);
         info = `<span class="sname"></span><span class="grade">${SM.SHORT[e.grade]}</span> · <span class="st">${e.stereo ? "STEREO" : "MONO"}</span><br>${fmtSeconds(e.seconds)}${e.oneShot ? "" : ` · ♩ ${e.bpm}`}`;
       } else info = "EMPTY";
-    } else info = state.work ? (isInternal(state.bank) ? "NO BACKUP" : "NOT FORMATTED") : "—";
+    } else info = state.work ? (isInternal(state.bank) ? "NO BACKUP" : "EMPTY") : "—";
     html.push(`<div class="pad${empty ? " empty" : ""}${pend ? " pending" : ""}${n === state.selected ? " selected" : ""}" data-n="${n}" draggable="${!empty && !pend}">
       <div class="pad-top"><span class="pad-name">${name}</span><span class="led${empty ? "" : !pend && onCard(state.bank, n) ? " on" : " amber"}" title="${empty ? "" : !pend && onCard(state.bank, n) ? "On the card" : "Not on the card yet: WRITE CARD"}"></span></div>
       <div class="pad-info">${info}</div></div>`);
@@ -292,7 +294,7 @@ function renderDetail() {
   const has = !!(s && !s.e.empty) && !pend;
   $("btn-export").disabled = !has;
   $("btn-clear").disabled = !has && !pend;
-  $("btn-import").disabled = !s;
+  $("btn-import").disabled = !state.work;           // a blank card too: it is formatted with the first pad
   if (!state.busy) {
     display(state.link ? "202" : "---");        // the SP-202 screen: 202 while the card is connected
   }
@@ -322,6 +324,7 @@ function applySetting(key, value) {
   else if (key === "level") r[8] = Math.max(0, Math.min(127, value));
   else return;
   s.sp.writeEntry(s.e.index, r);
+  toConfirm.add(name);                           // on the pad now; LOAD TO PAD confirms it
   edited(`${name}: ${key} → ${key === "effect" ? (EFFECTS.find(x => x[0] === value) || [0, value])[1] : value}`);
 }
 
@@ -337,9 +340,10 @@ function renderButtons() {
   $("btn-connect").classList.toggle("lit", linked);
   $("btn-read").disabled = !linked || powered || state.busy || !info.canDump;
   const dirty = dirtyBlocks().length;
-  const writable = linked && !powered && !state.busy && info.canWrite && state.work && (dirty > 0 || !state.base);
+  const waiting = Object.keys(state.pending).length;
+  const writable = linked && !powered && !state.busy && info.canWrite && state.work && (dirty > 0 || waiting > 0 || !state.base);
   $("btn-write").disabled = !writable;
-  $("write-count").textContent = state.base ? (dirty ? `${dirty} BLOCK${dirty > 1 ? "S" : ""}` : "") : (state.work ? "IMAGE" : "");
+  $("write-count").textContent = state.base ? (dirty ? `${dirty} BLOCK${dirty > 1 ? "S" : ""}` : waiting ? `${waiting} PAD${waiting > 1 ? "S" : ""}` : "") : (state.work ? "IMAGE" : "");
   $("btn-write").classList.toggle("lit", writable);
   $("btn-save").disabled = !state.work;
   $("btn-erase-all").disabled = !linked || powered || state.busy || !info.canWrite;
@@ -371,8 +375,7 @@ function renderBackup() {
       · ${fmtSeconds(bk.freeBytes() / SM.RATES[0])} free in HI-FI STEREO
       · ${mb(bk.dataEnd - bk.dataStart - bk.freeBytes())} of ${mb(bk.dataEnd - bk.dataStart)} MB used`;
   }
-  $("btn-bk-export").disabled = !(bk && bk.present());
-  $("btn-bk-import").disabled = !state.work;
+  $("btn-export-all").disabled = !allPads().length;
 }
 
 function exportBackup() {
@@ -429,13 +432,13 @@ function syncEditor(force) {
     editor.load({
       kind: "marks", title: [name, nameOf(s.sp, e), `${SM.GRADES[e.grade]} ${e.stereo ? "STEREO" : "MONO"}`, isInternal(state.bank) ? "INTERNAL" : "CARD"].filter(Boolean).join(" · "),
       total: e.length, start: e.playStart, end: e.playEnd || e.length, grade: e.grade, origGrade: e.grade, stereo: e.stereo,
-      original, minGrade: original ? 0 : e.grade, wantStereo: e.stereo,
+      original, minGrade: original ? 0 : e.grade, wantStereo: e.stereo, was: { start: e.playStart, end: e.playEnd || e.length },
       align: MARK_ALIGN, editable: true, pad: { bank: state.bank, index: e.index }, padName: name,
       data: p.r ? p.l.map((v, i) => (v + p.r[i]) / 2) : p.l, lr: p.r ? [p.l, p.r] : null, spb: p.spb,
       rate: e.rate, fileName: [name, nameOf(s.sp, e)].filter(Boolean).join(" "),
       info: original ? "ORIGINAL FILE KEPT" : `${Math.max(1, Math.round(e.length / 1024)).toLocaleString()} KB`,
     });
-  } else editor.load({ kind: "none", title: `${name} · EMPTY`, info: s ? "DROP AN AUDIO FILE ON THIS PAD" : "NO PAD TABLE: READ THE CARD OR OPEN AN IMAGE" });
+  } else editor.load({ kind: "none", title: `${name} · EMPTY`, info: s || state.work ? "DROP AN AUDIO FILE ON THIS PAD" : "READ CARD, OR DROP AN AUDIO FILE ON THIS PAD" });
 }
 
 function onEditorChange(src) {
@@ -449,6 +452,7 @@ function onEditorChange(src) {
     if (r[2] < 40 || r[2] > 250) r[2] = bpmOf(guessBeats(sec), sec);
     sp.writeEntry(src.pad.index, r);
     state.work.finalize();
+    toConfirm.add(src.padName);
     state.editorKey = `e:${e.name}:${e.start}:${e.length}:${state.source}`;
     renderPads(); renderDetail(); renderButtons();
   } else {
@@ -506,7 +510,7 @@ function padMenu(n, x, y) {
   render();
   const s = selectedEntry(), has = !!(s && !s.e.empty);
   const m = $("pad-menu");
-  m.innerHTML = `<button type="button" data-m="load"${s ? "" : " disabled"}>LOAD SAMPLE…</button>
+  m.innerHTML = `<button type="button" data-m="load">LOAD SAMPLE…</button>
     <button type="button" data-m="wav"${has ? "" : " disabled"}>EXPORT WAV</button>
     <button type="button" data-m="pad"${has ? "" : " disabled"}>EXPORT PAD</button>
     <button type="button" data-m="clear"${has ? "" : " disabled"}>CLEAR PAD</button>`;
@@ -530,6 +534,7 @@ async function loadAudio(bytes, fileName, bank, n) {
     state.bank = bank;
     state.selected = n;
     log(`${fileName} on ${name}: ${(a.data.length / a.rate).toFixed(2)} s at ${a.rate} Hz`, "info");
+    formatIfBlank(bank);
     const sp = spaceOf(bank), pend = state.pending[name];
     if (sp && sp.present()) {                    // straight onto the pad, at the best quality that fits
       const old = sp.entry(indexOf(bank, n)), free = sp.freeBytes() + (old.empty ? 0 : old.length);
@@ -556,9 +561,68 @@ function padSound(sp, e) {
 // brought to NORMAL_PEAK of the codec's REF level: 1290 units, the peak of the SP-202's own
 // recordings at REC LEVEL MAX, so kicks and bass do not overdrive what follows its output.
 const NORMAL_PEAK = 0.63;
+// Card pads changed (PLAY, MODE, marks...) since LOAD TO PAD last confirmed them.
+const toConfirm = new Set();
+
+// EXPORT ALL PADS: every pad of every bank, as a WAV (START-STOP, as the SP-202 plays it) and a
+// pad file (.sp202pad, to load back), in one .zip.
+function allPads() {
+  if (!state.work) return [];
+  const out = [];
+  for (const bank of ["A", "B", "C", "D"]) {
+    const sp = spaceOf(bank);
+    if (!sp || !sp.present()) continue;
+    for (let n = 0; n < 8; n++) { const e = sp.entry(indexOf(bank, n)); if (!e.empty) out.push({ bank, n, sp, e }); }
+  }
+  return out;
+}
+function exportAllPads() {
+  const files = [], clean = s => s.replace(/[\\/:*?"<>|]+/g, "_").trim();
+  for (const { bank, n, sp, e } of allPads()) {
+    const name = clean([bank + (n + 1), nameOf(sp, e)].filter(Boolean).join(" "));
+    const snd = padSound(sp, e), a = e.playStart * snd.spb, b = (e.playEnd || e.length) * snd.spb;
+    const [l, r] = [snd.l, snd.r].map(c => c && Audio202.toSP202(c.subarray(a, b), e.rate));
+    files.push([`${name}.wav`, wavFile(l.data, l.rate, r && r.data)], [`${name}.sp202pad`, SM.padFile(sp, e)]);
+  }
+  download(zipStore(files), `${clean(projName())}-pads.zip`);
+  log(`${files.length / 2} pads exported (WAV and pad files)`, "info");
+  note(`${files.length / 2} pads exported: ${clean(projName())}-pads.zip is in your Downloads.`, "ok");
+}
+// A .zip without compression (stored): [[name, bytes]...] -> bytes.
+function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], dir = [];
+  let at = 0;
+  for (const [name, data] of files) {
+    const nm = enc.encode(name), crc = crc32(data), h = new Uint8Array(30 + nm.length), v = new DataView(h.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true);
+    v.setUint32(14, crc, true); v.setUint32(18, data.length, true); v.setUint32(22, data.length, true);
+    v.setUint16(26, nm.length, true); h.set(nm, 30);
+    const c = new Uint8Array(46 + nm.length), w = new DataView(c.buffer);
+    w.setUint32(0, 0x02014b50, true); w.setUint16(4, 20, true); w.setUint16(6, 20, true); w.setUint16(8, 0x0800, true);
+    w.setUint32(16, crc, true); w.setUint32(20, data.length, true); w.setUint32(24, data.length, true);
+    w.setUint16(28, nm.length, true); w.setUint32(42, at, true); c.set(nm, 46);
+    parts.push(h, data); dir.push(c); at += h.length + data.length;
+  }
+  const size = dir.reduce((s, c) => s + c.length, 0), end = new Uint8Array(22), x = new DataView(end.buffer);
+  x.setUint32(0, 0x06054b50, true); x.setUint16(8, files.length, true); x.setUint16(10, files.length, true);
+  x.setUint32(12, size, true); x.setUint32(16, at, true);
+  const out = new Uint8Array(at + size + 22);
+  let o = 0;
+  for (const p of [...parts, ...dir, end]) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+// A card left blank (ERASE) gets the SP-202's blank format, so samples can go on its pads.
+function formatIfBlank(bank) {
+  if (isInternal(bank) || !state.work || state.work.isFormatted() || state.work.usedBlocks().length) return;
+  state.work.formatBlank();
+  log("the card is blank: the SP-202's blank format is put on it (as FORMAT on the SP-202), with the next WRITE CARD", "info");
+}
+
 async function commitPending(name) {
   const pend = state.pending[name];
   if (!pend) return false;
+  formatIfBlank(name[0]);
   const bank = name[0], n = +name.slice(1) - 1, sp = spaceOf(bank);
   if (!sp || !sp.present()) { note(`Bank ${bank} is not on the image: READ CARD first.`, "err"); return false; }
   const set = pend.settings;
@@ -642,6 +706,7 @@ function truncatePad(src) {
     originals[sampleKey(data)] = { ...o, from: o.from + Math.round(src.start * k), to: o.from + Math.round(src.end * k) };
   }
   state.editorKey = null;
+  toConfirm.delete(src.padName);
   edited(`${e.name} truncated: ${size(e.length)} → ${size(data.length)}, ${size(e.length - data.length)} freed (WRITE CARD to keep it)`);
   note(`${e.name} truncated: ${size(e.length - data.length)} freed. WRITE CARD to put it on the card.`, "ok");
   return true;
@@ -868,6 +933,7 @@ function openImage(bytes, name) {
 }
 
 function loadPadFile(bytes, name, bank, n) {
+  formatIfBlank(bank);
   const sp = spaceOf(bank);
   if (!sp || !sp.present()) { note(`Bank ${bank} is not on the image.`, "err"); return; }
   try {
@@ -949,6 +1015,12 @@ async function saveSetToCard() {
   state.busy = true;
   renderButtons();
   try {
+    // the waiting files go on their pads first: the set keeps the pads as the SP-202 holds them
+    // (its quality, START-STOP), not the original files, which are many times bigger
+    if (state.work) for (const pad of Object.keys(state.pending)) {
+      display("Enc", `ENCODING ${pad}`);
+      if (!await commitPending(pad)) return;
+    }
     display("SEt", "SAVING THE SET");
     const bytes = Project.save(state, name, true);
     log(`saving sample set "${name}" on the card (${(bytes.length / 1048576).toFixed(2)} MB)`, "info");
@@ -1069,8 +1141,7 @@ function bind() {
   $("btn-set-card").onclick = saveSetToCard;
   $("btn-erase-all").onclick = eraseCard;
   bindFirmware();
-  $("btn-bk-export").onclick = exportBackup;
-  $("btn-bk-import").onclick = () => $("file-backup").click();
+  $("btn-export-all").onclick = exportAllPads;
   $("file-backup").onchange = async e => { const f = e.target.files[0]; if (f) importBackup(new Uint8Array(await f.arrayBuffer()), f.name); e.target.value = ""; };
   $("btn-proj-open").onclick = showProjects;
   $("proj-close").onclick = () => $("projects").close();
@@ -1221,7 +1292,21 @@ function bind() {
 
 async function start() {
   editor = new WaveEditor($("editor"), onEditorChange);
-  editor.onLoad = src => src.kind === "marks" ? resamplePad(src) : commitPending(src.pad);
+  editor.onLoad = async src => {
+    if (src.kind !== "marks") return commitPending(src.pad);
+    if (src.grade !== src.origGrade || (src.wantStereo ?? src.stereo) !== src.stereo || src.start !== src.was.start || src.end !== src.was.end) {
+      const done = await resamplePad(src);
+      toConfirm.delete(src.padName);
+      src.was = { start: src.start, end: src.end };
+      if (!done) editor.renderFields();
+      return;
+    }
+    toConfirm.delete(src.padName);
+    log(`${src.padName}: changes confirmed`);
+    note(`${src.padName}: changes kept on the pad. WRITE CARD puts them on the card.`, "ok");
+    editor.renderFields();
+  };
+  editor.toConfirm = name => toConfirm.has(name);
   editor.onTruncate = truncatePad;
   editor.onSaveWav = async src => {           // what ▶ AS SP-202 plays: START–STOP, the quality, at 31.25 kHz
     const s = await editor.sound202();

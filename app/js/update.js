@@ -2,7 +2,7 @@
  * SmartMare 5V - update check: the latest release on smartmare.com
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.2 - 4 Nov 2026
+ * Version 1.2.7 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Asks smartmare.com for latest.json (written by WebSite/build.py from the latest release) when

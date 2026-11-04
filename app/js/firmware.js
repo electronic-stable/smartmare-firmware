@@ -2,7 +2,7 @@
  * SmartMare 5V - firmware update from the loader pages
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.2 - 4 Nov 2026
+ * Version 1.2.7 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Firmware update, shared by the SP-202 Card Manager (app.js) and the generic card's page
@@ -192,5 +192,6 @@ function bindFirmware() {
     await updateFirmware();
   };
   $("btn-fw-auto").onclick = autoUpdate;
+  $("btn-fw-check").onclick = () => checkUpdates(false);
   $("btn-fw-copy").onclick = copyFirmware;
 }
