@@ -24,7 +24,7 @@ SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland C
 SmartMare and Electronic Stable are not affiliated with them.
 
 ## Versions
-The version is set in `CMakeLists.txt` (`project(... VERSION 1.0.0 ...)`), is part of each
+The version is set in `CMakeLists.txt` (`project(... VERSION 1.2.0 ...)`), is part of each
 firmware's file name, and is shown on the card's USB serial port when it starts.
 
 ## SmartMare 5V
