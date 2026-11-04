@@ -2,7 +2,7 @@
  * SmartMare 5V - sound editor: waveform, start and stop points, zoom and preview
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The trim screen: an MPC-style LCD with the waveform, START / END flags, zoom, and the
@@ -260,10 +260,8 @@ class WaveEditor {
       <span>LEN <b>${t(len)}</b> s</span><span>${s.info || ""}</span>`;
     b.forEach(x => {
       const a = x.dataset.ed;
-      // card pad: LOAD TO PAD for a new quality or channels, TRUNCATE for the marks
-      const reload = s.kind === "marks" && (s.grade !== s.origGrade || (s.wantStereo ?? s.stereo) !== s.stereo);
       const needs = a === "preview" ? (s.kind === "audio" || s.kind === "marks") && !!s.data
-        : a === "load" ? s.kind === "audio" || reload
+        : a === "load" ? s.kind === "audio" || (s.kind === "marks" && !!s.data)   // also after TRUNCATE, PLAY, MODE
         : a === "truncate" ? s.kind === "marks" && (s.start > 0 || s.end < s.total)
         : ["play", "playsel", "savewav"].includes(a) ? !!s.data : true;
       x.disabled = !needs || (!s.editable && /^(s|e)[-+]/.test(a));

@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 loader page: pads, trims, sample sets, card read and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare SP-202 Card Manager: the page. Card model in card.js, USB in serial.js. */
@@ -457,28 +457,61 @@ function onEditorChange(src) {
   }
 }
 
-// Plays a pad like a sampler: an audio file at its grade, START to END.
-async function trigger(n) {
+// Plays a pad as the SP-202 does: TRIGGER starts it on a press (with LOOP, the next press stops
+// it), GATE plays it only while the pad or its key is held; LOOP repeats START-STOP, ONE SHOT
+// plays it once. held: the pad sounding now.
+let held = null;
+async function padDown(n) {
   const name = state.bank + (n + 1), pend = state.pending[name];
   const el = $("pads").querySelector(`[data-n="${n}"]`);
-  if (!pend) {
-    const s = spaceOf(state.bank), e = s && s.present() ? s.entry(indexOf(state.bank, n)) : null;
-    if (!e || e.empty) return;
-    const snd = padSound(s, e);
-    document.querySelectorAll(".pad.playing").forEach(x => x.classList.remove("playing"));
-    const p = Audio202.play(snd.l, e.rate, e.playStart * snd.spb, (e.playEnd || e.length) * snd.spb, false,
-                            () => el?.classList.remove("playing"), snd.r);
-    if (editor?.src?.kind === "marks" && editor.src.pad.index === e.index && editor.src.pad.bank === state.bank) p.source = editor.src;
-    el?.classList.add("playing");
-    return;
-  }
-  const rate = SM.RATES[pend.grade];
-  const key = `${pend.grade}:${pend.start}:${pend.end}`;
-  if (!pend.cache || pend.cache.key !== key)
-    pend.cache = { key, data: await Audio202.resample(pend.data.subarray(Math.floor(pend.start), Math.floor(pend.end)), pend.rate, rate) };
+  const s = spaceOf(state.bank), e = !pend && s && s.present() ? s.entry(indexOf(state.bank, n)) : null;
+  if (!pend && (!e || e.empty)) return;
+  const gate = pend ? !!pend.settings.gate : e.gate, loop = pend ? !pend.settings.oneShot : !e.oneShot;
+  if (held && held.name === name && held.loop && !gate) { Audio202.stop(); held = null; return; }   // TRIGGER + LOOP: press again to stop
+  const me = { name, n, gate, loop };
   document.querySelectorAll(".pad.playing").forEach(x => x.classList.remove("playing"));
-  Audio202.play(pend.cache.data, rate, 0, pend.cache.data.length, false, () => el?.classList.remove("playing"));
+  const done = () => { el?.classList.remove("playing"); if (held === me) held = null; };
+  if (!pend) {
+    const snd = padSound(s, e);
+    const p = Audio202.play(snd.l, e.rate, e.playStart * snd.spb, (e.playEnd || e.length) * snd.spb, loop, done, snd.r);
+    if (editor?.src?.kind === "marks" && editor.src.pad.index === e.index && editor.src.pad.bank === state.bank) p.source = editor.src;
+  } else {
+    const rate = SM.RATES[pend.grade];
+    const key = `${pend.grade}:${pend.start}:${pend.end}`;
+    if (!pend.cache || pend.cache.key !== key)
+      pend.cache = { key, data: await Audio202.resample(pend.data.subarray(Math.floor(pend.start), Math.floor(pend.end)), pend.rate, rate) };
+    Audio202.play(pend.cache.data, rate, 0, pend.cache.data.length, loop, done);
+  }
+  held = me;
   el?.classList.add("playing");
+}
+function padUp(n) {
+  if (held && held.gate && held.n === n) { Audio202.stop(); held = null; }   // GATE: the sound stops with the finger
+}
+const trigger = n => padDown(n);
+
+// EXPORT WAV of a pad (right-click): START-STOP as the SP-202 plays it, 31.25 kHz.
+function exportPadWav(sp, e) {
+  const snd = padSound(sp, e), a = e.playStart * snd.spb, b = (e.playEnd || e.length) * snd.spb;
+  const [l, r] = [snd.l, snd.r].map(c => c && Audio202.toSP202(c.subarray(a, b), e.rate));
+  const name = [e.name, nameOf(sp, e)].filter(Boolean).join(" ");
+  download(wavFile(l.data, l.rate, r && r.data), `${name}-${SM.SHORT[e.grade].toLowerCase()}.wav`);
+  log(`${e.name}: exported as WAV (${SM.GRADES[e.grade]}, ${fmtSeconds(e.seconds)})`, "info");
+}
+
+// The right-click menu of a pad.
+function padMenu(n, x, y) {
+  state.selected = n;
+  render();
+  const s = selectedEntry(), has = !!(s && !s.e.empty);
+  const m = $("pad-menu");
+  m.innerHTML = `<button type="button" data-m="load"${s ? "" : " disabled"}>LOAD SAMPLE…</button>
+    <button type="button" data-m="wav"${has ? "" : " disabled"}>EXPORT WAV</button>
+    <button type="button" data-m="pad"${has ? "" : " disabled"}>EXPORT PAD</button>
+    <button type="button" data-m="clear"${has ? "" : " disabled"}>CLEAR PAD</button>`;
+  m.hidden = false;
+  m.style.left = `${Math.min(x, innerWidth - m.offsetWidth - 8)}px`;
+  m.style.top = `${Math.min(y, innerHeight - m.offsetHeight - 8)}px`;
 }
 
 async function loadAudio(bytes, fileName, bank, n) {
@@ -562,7 +595,10 @@ async function resamplePad(src) {
   const t0 = performance.now();
   const { parts, region } = await soundParts(src);
   const stereo = parts.length > 1;
-  if (src.grade === e.grade && stereo === e.stereo && !cut) return false;
+  if (src.grade === e.grade && stereo === e.stereo && !cut) {
+    note(`${e.name} already holds this sound (quality, channels, marks). WRITE CARD puts the pad on the card.`, "ok");
+    return false;
+  }
   const { bytes, clipped } = stereo ? Codec202.encodeStereo(parts[0], parts[1]) : Codec202.encode(parts[0]);
   const data = bytes.length % 16 ? Uint8Array.from([...bytes, ...new Uint8Array(16 - bytes.length % 16)]) : bytes;
   const r = Uint8Array.from(e.raw);
@@ -1081,21 +1117,50 @@ function bind() {
     $("mem-info").hidden = !open;
     $("mem-info-btn").setAttribute("aria-expanded", String(open));
   };
+  // press = sound (as on the SP-202), release = the end of a GATE pad; the panels follow on click
+  pads.addEventListener("pointerdown", e => {
+    const p = e.target.closest(".pad");
+    if (!p || e.button !== 0) return;
+    pads.querySelectorAll(".pad.selected").forEach(x => x.classList.remove("selected"));
+    p.classList.add("selected");
+    padDown(+p.dataset.n);
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"])
+    pads.addEventListener(ev, e => { const p = e.target.closest(".pad"); if (p) padUp(+p.dataset.n); }, true);
   pads.addEventListener("click", e => {
     const p = e.target.closest(".pad");
     if (!p) return;
     state.selected = +p.dataset.n;
     render();
-    trigger(state.selected);
   });
+  pads.addEventListener("contextmenu", e => {
+    const p = e.target.closest(".pad");
+    if (!p) return;
+    e.preventDefault();
+    padMenu(+p.dataset.n, e.clientX, e.clientY);
+  });
+  $("pad-menu").addEventListener("click", e => {
+    const b = e.target.closest("[data-m]");
+    if (!b || b.disabled) return;
+    $("pad-menu").hidden = true;
+    const s = selectedEntry();
+    if (b.dataset.m === "load") $("file-pad").click();
+    else if (s && !s.e.empty && b.dataset.m === "wav") exportPadWav(s.sp, s.e);
+    else if (s && !s.e.empty && b.dataset.m === "pad") $("btn-export").click();
+    else if (s && !s.e.empty && b.dataset.m === "clear") $("btn-clear").click();
+  });
+  window.addEventListener("pointerdown", e => { if (!e.target.closest("#pad-menu")) $("pad-menu").hidden = true; });
   window.addEventListener("keydown", e => {
     if (e.target.closest?.("input, select, textarea, dialog") || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === "Escape") $("pad-menu").hidden = true;
     if (e.key >= "1" && e.key <= "8") {
+      if (e.repeat) return;
       state.selected = +e.key - 1;
       render();
-      trigger(state.selected);
-    } else if (e.key === " ") { e.preventDefault(); Audio202.stop(); }
+      padDown(state.selected);
+    } else if (e.key === " ") { e.preventDefault(); Audio202.stop(); held = null; }
   });
+  window.addEventListener("keyup", e => { if (e.key >= "1" && e.key <= "8") padUp(+e.key - 1); });
   pads.addEventListener("dragstart", e => {
     const p = e.target.closest(".pad");
     if (!p) return;

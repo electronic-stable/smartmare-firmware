@@ -2,7 +2,7 @@
 SmartMare 5V - packs the loader page into the firmware's USB drive
 
 Fabien Roffet for Electronic Stable - smartmare.com
-Version 1.2.0 - 4 Nov 2026
+Version 1.2.1 - 4 Nov 2026
 SPDX-License-Identifier: GPL-3.0-or-later
 
 The files of the SmartMare USB drive: the card manager page in one HTML file, and a README.

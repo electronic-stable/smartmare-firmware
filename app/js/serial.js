@@ -2,7 +2,7 @@
  * SmartMare 5V - the card over USB (Web Serial): commands, dump and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The emulator over USB (Web Serial): text lines in, keys and blocks out.

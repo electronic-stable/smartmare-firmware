@@ -3,7 +3,7 @@
   SmartMare 5V - SP-202 loader: pads, sample sets and backup bank over USB
 
   Fabien Roffet for Electronic Stable - smartmare.com
-  Version 1.2.0 - 4 Nov 2026
+  Version 1.2.1 - 4 Nov 2026
   SPDX-License-Identifier: MIT
 -->
 <html lang="en">
@@ -75,7 +75,7 @@
     <!-- PADS -->
     <section class="sec" id="sec-pads">
       <header class="sec-head"><span class="sec-num"></span><h2>PADS</h2>
-        <p>Click a pad (or press 1–8) to play it. Drag it onto another pad to copy it, or drop an audio file on it.</p></header>
+        <p>Press a pad (or 1–8) to play it as the SP-202 does. Right-click for more. Drag it onto another pad to copy it, or drop an audio file on it.</p></header>
       <div class="sec-body">
         <div class="pads" id="pads"></div>
         <div class="bank-bar">
@@ -241,6 +241,7 @@
   <footer class="foot">SmartMare by Electronic Stable. SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland Corporation. SmartMare and Electronic Stable are not affiliated with them.</footer>
 </div>
 
+<div class="pad-menu" id="pad-menu" hidden></div>
 <div class="dropzone" id="dropzone"><div>Drop a <b>.smartmare</b> sample set or a <b>.img</b> card image to open it · audio files and <b>.sp202pad</b> on a pad</div></div>
 
 <dialog id="projects">

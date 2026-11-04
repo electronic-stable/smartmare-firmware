@@ -2,7 +2,7 @@
  * SmartMare 5V - SmartMedia command set: reset, ID, read, program, erase
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * SmartMedia device behaviour (SmartMedia Electrical Spec 1999, §5, §6, §8), hardware free.

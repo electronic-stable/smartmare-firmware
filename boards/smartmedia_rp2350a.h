@@ -2,7 +2,7 @@
  * SmartMare 5V - Pico SDK board definition: RP2350A, 12 MHz crystal, 16 MB flash
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Board header: SmartMedia 5V card emulator v0.2 (RP2350A QFN-60).

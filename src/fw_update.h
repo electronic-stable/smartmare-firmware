@@ -2,7 +2,7 @@
  * SmartMare 5V - one-click firmware update over the USB serial link
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #ifndef FW_UPDATE_H

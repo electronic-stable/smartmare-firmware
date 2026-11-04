@@ -2,7 +2,7 @@
  * SmartMare 5V - self-test firmware: checks the card against a simulated SP-202
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * On-card self test: the SmartMedia scenarios against the image in the W25Q128.

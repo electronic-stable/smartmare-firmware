@@ -2,7 +2,7 @@
  * SmartMare 5V - sample sets kept in the card's flash
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Sample sets kept on the card, in the flash above the SmartMedia image (7 .. 16 MB).

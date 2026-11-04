@@ -2,7 +2,7 @@
  * SmartMare 5V - the read-only SMARTMARE USB drive with the loader page
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * The read-only SMARTMARE drive, built at run time: a FAT16 disk of 64 MB (4 KB clusters)

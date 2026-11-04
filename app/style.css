@@ -2,7 +2,7 @@
  * SmartMare 5V - style of the loader pages
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.0 - 4 Nov 2026
+ * Version 1.2.1 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare card pages (Pad Editor, Card Manager): a light theme, like the website.
@@ -139,7 +139,7 @@ body {
 .steps li { margin-bottom: 4px; }
 kbd { font-family: var(--font); font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--silk);
   background: #f1f2f4; border: 1px solid var(--key-line); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; }
-.bank-bar { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: end; margin-top: 16px; }
+.bank-bar { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: flex-start; margin-top: 16px; }
 .bank-bar .memory { flex: 1; min-width: 180px; }
 
 /* ---------- keys ---------- */
@@ -398,3 +398,11 @@ a.key { text-decoration: none; }
 .area-row:empty { display: none; }
 .area-row .silk { padding: 0 8px; font-size: 10px; }
 .area-row button { padding: 4px 8px; }
+/* the right-click menu of a pad */
+.pad-menu { position: fixed; z-index: 20; display: grid; min-width: 170px; padding: 4px; background: #fff;
+  border: 1px solid var(--key-line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.pad-menu[hidden] { display: none; }
+.pad-menu button { font: 400 13px/1 var(--font); letter-spacing: .1em; color: var(--silk); text-align: left;
+  background: none; border: 0; border-radius: 4px; padding: 9px 10px; cursor: pointer; }
+.pad-menu button:hover:not(:disabled) { background: #f1f2f4; }
+.pad-menu button:disabled { opacity: .4; cursor: default; }

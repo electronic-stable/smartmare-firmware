@@ -24,7 +24,7 @@ SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland C
 SmartMare and Electronic Stable are not affiliated with them.
 
 ## Versions
-The version is set in `CMakeLists.txt` (`project(... VERSION 1.2.0 ...)`), is part of each
+The version is set in `CMakeLists.txt` (`project(... VERSION 1.2.1 ...)`), is part of each
 firmware's file name, and is shown on the card's USB serial port when it starts.
 
 ## SmartMare 5V
@@ -86,12 +86,12 @@ Then connect the card by USB-C.
   receives the firmware over USB, checks its SHA-256, swaps it in and restarts; the previous one is
   kept, and GO BACK returns to it. The same from a computer:
   ```
-  python tools/self_update.py build/smartmare-5v-sp-202-firmware-v1.2.0.uf2
+  python tools/self_update.py build/smartmare-5v-sp-202-firmware-v1.2.1.uf2
   python tools/self_update.py --back
   ```
 - **With picotool** (any firmware; the card restarts into its update mode by itself):
   ```
-  picotool load -f -x build/smartmare-5v-sp-202-firmware-v1.2.0.uf2
+  picotool load -f -x build/smartmare-5v-sp-202-firmware-v1.2.1.uf2
   ```
 - **By hand:** when the card is in update mode a drive called **RP2350** appears; copy the
   `.uf2` file onto it and the card restarts by itself. A card with no firmware at all starts
