@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 loader page: pads, trims, sample sets, card read and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare SP-202 Card Manager: the page. Card model in card.js, USB in serial.js. */
@@ -430,7 +430,7 @@ function syncEditor(force) {
       kind: "marks", title: [name, nameOf(s.sp, e), `${SM.GRADES[e.grade]} ${e.stereo ? "STEREO" : "MONO"}`, isInternal(state.bank) ? "INTERNAL" : "CARD"].filter(Boolean).join(" · "),
       total: e.length, start: e.playStart, end: e.playEnd || e.length, grade: e.grade, origGrade: e.grade, stereo: e.stereo,
       original, minGrade: original ? 0 : e.grade, wantStereo: e.stereo,
-      align: MARK_ALIGN, editable: true, pad: { bank: state.bank, index: e.index },
+      align: MARK_ALIGN, editable: true, pad: { bank: state.bank, index: e.index }, padName: name,
       data: p.r ? p.l.map((v, i) => (v + p.r[i]) / 2) : p.l, lr: p.r ? [p.l, p.r] : null, spb: p.spb,
       rate: e.rate, fileName: [name, nameOf(s.sp, e)].filter(Boolean).join(" "),
       info: original ? "ORIGINAL FILE KEPT" : `${Math.max(1, Math.round(e.length / 1024)).toLocaleString()} KB`,
@@ -473,14 +473,15 @@ async function padDown(n) {
   const done = () => { el?.classList.remove("playing"); if (held === me) held = null; };
   if (!pend) {
     const snd = padSound(s, e);
-    const p = Audio202.play(snd.l, e.rate, e.playStart * snd.spb, (e.playEnd || e.length) * snd.spb, loop, done, snd.r);
-    if (editor?.src?.kind === "marks" && editor.src.pad.index === e.index && editor.src.pad.bank === state.bank) p.source = editor.src;
+    Audio202.play(snd.l, e.rate, e.playStart * snd.spb, (e.playEnd || e.length) * snd.spb, loop, done, snd.r).pad = name;   // the editor's playhead follows it
   } else {
     const rate = SM.RATES[pend.grade];
     const key = `${pend.grade}:${pend.start}:${pend.end}`;
     if (!pend.cache || pend.cache.key !== key)
       pend.cache = { key, data: await Audio202.resample(pend.data.subarray(Math.floor(pend.start), Math.floor(pend.end)), pend.rate, rate) };
-    Audio202.play(pend.cache.data, rate, 0, pend.cache.data.length, loop, done);
+    const p = Audio202.play(pend.cache.data, rate, 0, pend.cache.data.length, loop, done);
+    p.pad = name;
+    p.base = pend.start;                         // the playhead counts from START
   }
   held = me;
   el?.classList.add("playing");
@@ -821,6 +822,7 @@ async function eraseCard() {
   renderButtons();
   try {
     display("Er", "ERASING");
+    waitBanner("Erasing the card… Keep it connected.");
     await state.link.eraseAll((n, total) => display(n < 0 ? "SEt" : String(Math.round(100 * n / total)).padStart(3, " ").slice(-3), n < 0 ? "ERASING THE SETS" : `ERASING ${n} / ${total}`));
     log("card erased: image and sample sets", "info");
     state.base = new SM.Image();
@@ -833,6 +835,7 @@ async function eraseCard() {
     log(`erase: ${e.message}`, "err");
     note(`Not erased: ${e.message}`, "err");
   } finally {
+    waitBanner(null);
     state.busy = false;
     render();
   }

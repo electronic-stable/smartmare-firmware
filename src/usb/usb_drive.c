@@ -2,7 +2,7 @@
  * SmartMare 5V - the read-only SMARTMARE USB drive with the loader page
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * The read-only SMARTMARE drive, built at run time: a FAT16 disk of 64 MB (4 KB clusters)
@@ -625,6 +625,8 @@ static void wav_sector(const node_t *n, uint32_t off, uint8_t *out) {
 }
 #endif
 
+static uint64_t removed_until;                      // the drive shows no medium until then
+
 void usb_drive_changed(void) {
     uint32_t irq = save_and_disable_interrupts();     // no USB read sees a half-built table
     build();
@@ -632,6 +634,7 @@ void usb_drive_changed(void) {
     cache[0].valid = cache[1].valid = false;
 #endif
     media_changed = true;
+    removed_until = time_us_64() + 1500000;            // 1.5 s without a medium: the host lets go of the old view
     restore_interrupts(irq);
 }
 
@@ -726,6 +729,12 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 }
 
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
+    // After a set is saved or deleted: "no medium" for a moment, then "medium changed", as when a
+    // card is swapped. Windows then mounts the drive afresh instead of showing its cached folders.
+    if (time_us_64() < removed_until) {
+        tud_msc_set_sense(lun, SCSI_SENSE_NOT_READY, 0x3A, 0x00);
+        return false;
+    }
     if (media_changed) {                               // once: the host reads the disk again
         media_changed = false;
         tud_msc_set_sense(lun, SCSI_SENSE_UNIT_ATTENTION, 0x28, 0x00);

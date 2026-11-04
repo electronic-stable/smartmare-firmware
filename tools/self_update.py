@@ -1,7 +1,7 @@
 """
 SmartMare 5V - one-click firmware update from the PC (what the Card Manager's UPDATE does)
 Fabien Roffet for Electronic Stable - smartmare.com
-Version 1.2.1 - 4 Nov 2026
+Version 1.2.2 - 4 Nov 2026
 SPDX-License-Identifier: GPL-3.0-or-later
 
 For a card already on firmware 1.2.0 or later: sends a firmware over the serial link (key U),

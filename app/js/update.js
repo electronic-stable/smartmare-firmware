@@ -2,7 +2,7 @@
  * SmartMare 5V - update check: the latest release on smartmare.com
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Asks smartmare.com for latest.json (written by WebSite/build.py from the latest release) when
@@ -32,7 +32,7 @@ function newer(a, b) {
 }
 
 async function checkUpdates(quiet) {
-  $("update-info").textContent = "Checking smartmare.com…";
+  $("update-info").textContent = "Checking…";
   try {
     const r = await fetch(siteUrl("latest.json"), { cache: "no-store" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -40,7 +40,7 @@ async function checkUpdates(quiet) {
     log(`update check: latest release v${latest.version} (${latest.date})`, "info");
   } catch (e) {
     latest = null;
-    $("update-info").textContent = quiet ? "" : "smartmare.com could not be reached to check for updates.";
+    $("update-info").textContent = quiet ? "" : "smartmare.com cannot be reached.";
     log(`update check: smartmare.com not reached (${e.message})`, quiet ? "info" : "warn");
   }
   renderUpdate();
@@ -51,25 +51,19 @@ async function checkUpdates(quiet) {
 const cardVersion = () => state.info?.fwVersion || (state.info?.firmware ? "0.0.0" : null);
 
 function renderUpdate() {
-  const el = $("update-info"), get = $("btn-fw-latest");
-  get.hidden = true;
+  const el = $("update-info");
   if (!latest) return;
-  const card = cardVersion(), lines = [];
-  if (!card) lines.push(`Latest firmware: v${latest.version}. CONNECT to compare it with the card's.`);
-  else if (newer(latest.version, card)) {
-    lines.push(`Firmware v${latest.version} is available (the card has ${card === "0.0.0" ? "a firmware older than v1.0.0" : `v${card}`}).`);
-    get.hidden = false;
-    get.textContent = `GET v${latest.version}`;
-  } else lines.push(newer(card, latest.version)
-      ? `The card's firmware v${card} is newer than the latest release (v${latest.version}).`
-      : `The card's firmware v${card} is up to date.`);
-  el.textContent = lines.join(" ");
+  const card = cardVersion();
+  const has = card === "0.0.0" ? "older than v1.0.0" : `v${card}`;
+  el.textContent = !card ? `Latest: v${latest.version}.`
+    : newer(latest.version, card) ? `Card ${has} · v${latest.version} available: AUTO UPDATE.`
+    : `Card v${card} · latest v${latest.version}.`;
   if (!ON_SITE && newer(latest.version, PAGE_VERSION)) {
     const a = document.createElement("a");
     a.href = siteUrl(latest.page[PAGE_KIND]);
     a.target = "_blank";
     a.rel = "noopener";
-    a.textContent = `Open the Card Manager v${latest.version} on smartmare.com`;
+    a.textContent = "Newer page online";
     el.append(" ", a, ".");
   }
 }
@@ -79,7 +73,7 @@ function renderUpdate() {
 // downloaded instead, for CHOOSE .UF2.
 async function getLatestFirmware() {
   const f = latest?.firmware?.[PAGE_KIND];
-  if (!f) return;
+  if (!f) return false;
   const url = siteUrl(f.file), name = f.file.split("/").pop();
   fwStatus(`Getting ${name}…`);
   try {
@@ -91,16 +85,16 @@ async function getLatestFirmware() {
     const err = checkUf2(bytes);
     if (err) throw new Error(err);
     firmware = { name, bytes };
-    $("fw-file").textContent = `${name} · ${(bytes.length / 2 / 1024).toFixed(0)} KB of firmware`;
-    fwStatus(`${name} is ready and checked: press UPDATE.`, "ok");
-    renderFirmware();
+    fwStatus("");
+    return true;
   } catch (e) {
     log(`update: ${name} not fetched (${e.message}); downloading it instead`, "warn");
     const a = document.createElement("a");
     a.href = url;
     a.download = name;
     a.click();
-    fwStatus(`${name} is downloading: then CHOOSE .UF2 and pick it.`);
+    fwStatus(`${name} is downloading: then MANUAL UPDATE and pick it.`);
+    return false;
   }
 }
 
@@ -111,7 +105,3 @@ function updateSeen() {
   else if (latest) renderUpdate();
 }
 
-function bindUpdate() {
-  $("btn-fw-check").onclick = () => checkUpdates(false);
-  $("btn-fw-latest").onclick = getLatestFirmware;
-}

@@ -2,7 +2,7 @@
  * SmartMare 5V - generic loader page: read, back up, restore and erase the card
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * SmartMare Generic Card Manager: the page of the generic card (any device with a 5 V SmartMedia
@@ -274,6 +274,7 @@ async function eraseCard() {
   renderButtons();
   try {
     display("Er", "ERASING");
+    waitBanner("Erasing the card… Keep it connected.");
     await state.link.eraseImage((n, total) => display(String(Math.round(100 * n / total)).padStart(3, " ").slice(-3), `ERASING ${n} / ${total}`));
     log("card erased", "info");
     state.base = new SM.Image();
@@ -282,7 +283,7 @@ async function eraseCard() {
     note("The card is blank. Format it in the device before use.", "ok");
     display("---", "ERASED");
   } catch (e) { log(`erase: ${e.message}`, "err"); note(`Not erased: ${e.message}`, "err"); }
-  finally { state.busy = false; render(); }
+  finally { waitBanner(null); state.busy = false; render(); }
 }
 
 // ---------- events ----------

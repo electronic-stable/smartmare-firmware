@@ -2,7 +2,7 @@
  * SmartMare 5V - sound editor: waveform, start and stop points, zoom and preview
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The trim screen: an MPC-style LCD with the waveform, START / END flags, zoom, and the
@@ -232,7 +232,8 @@ class WaveEditor {
     const g = this.canvas.getContext("2d");
     g.putImageData(this.lastFrame, 0, 0);
     this.wasPlaying = !!p;
-    if (!p || p.source !== s) { this.root.querySelector(".lcd-play").textContent = ""; return; }
+    // played here, or by pressing its pad (the editor may have reloaded the pad since)
+    if (!p || !(p.source === s || (p.pad && p.pad === (s.padName || s.pad)))) { this.root.querySelector(".lcd-play").textContent = ""; return; }
     const n = p.at * s.rate / p.rate;                                       // in samples of the source
     const at = (p.base || 0) + (s.kind === "audio" ? n : n / this.spu());   // back to the source's units
     const x = this.x(at), { h, dpr } = this.size();

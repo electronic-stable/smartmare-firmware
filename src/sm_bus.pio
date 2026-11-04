@@ -1,7 +1,7 @@
 ; SmartMare 5V - SmartMedia bus PIO programs, card side
 ;
 ; Fabien Roffet for Electronic Stable - smartmare.com
-; Version 1.2.1 - 4 Nov 2026
+; Version 1.2.2 - 4 Nov 2026
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
 ; SmartMedia bus, card side, on PIO0 (RP2350A, GPIO base 0).

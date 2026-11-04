@@ -2,7 +2,7 @@
  * SmartMare 5V - the read-only SMARTMARE USB drive with the loader page
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 /* The SMARTMARE USB drive (usb_drive.c): the Pad Editor, a README, the sample sets. */

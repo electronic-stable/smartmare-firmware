@@ -2,7 +2,7 @@
  * SmartMare 5V - firmware update from the loader pages
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Firmware update, shared by the SP-202 Card Manager (app.js) and the generic card's page
@@ -37,16 +37,22 @@ function fwStatus(text, cls = "") {
 // "SP-202 firmware v1.2.0" (or "SP-202 RESEARCH firmware v1.2.0") from the card's banner.
 const fwName = banner => (banner || "").match(/5V (.*?firmware v\d+\.\d+\.\d+)/)?.[1] || "";
 
+// A full-page "please wait" while the card does something long (erase). text: null hides it.
+function waitBanner(text) {
+  $("wait").hidden = !text;
+  if (text) $("wait-text").textContent = text;
+}
+
 function renderFirmware() {
-  const powered = state.info?.powered === true;
-  $("btn-fw-go").disabled = !firmware || !state.link || powered || state.busy;
-  $("btn-fw-go").title = !firmware ? "Choose a .uf2 file first" : !state.link ? "CONNECT the card first" : powered ? "Switch the SP-202 off" : "";
-  const prev = state.link && !powered && !state.busy ? state.info?.previousFw : null;
-  $("btn-fw-back").hidden = !prev;
-  if (prev) $("btn-fw-back").title = `Back to the card's previous firmware: ${prev}`;
-  // what runs and what is kept, in words (both may have the same version number)
-  const now = fwName(state.info?.banner);
-  $("fw-now").textContent = state.link && now ? `Running: ${now}${prev ? ` · kept for GO BACK: ${prev}` : ""}.` : "";
+  const powered = state.info?.powered === true, ready = !!state.link && !powered && !state.busy;
+  for (const id of ["btn-fw-auto", "btn-fw-file"]) {
+    $(id).disabled = !ready;
+    if (!ready) $(id).title = !state.link ? "CONNECT the card first" : powered ? "Switch the SP-202 off" : "The card is busy";
+  }
+  if (ready) {
+    $("btn-fw-auto").title = "Gets the latest firmware from smartmare.com and installs it";
+    $("btn-fw-file").title = "Installs a firmware file (.uf2) from your computer";
+  }
   updateSeen();
 }
 
@@ -85,8 +91,8 @@ async function reconnectCard() {
 // One-click update (card firmware 1.2.0+): the firmware goes over the open link, the card checks
 // it, swaps it in (keeping the old one) and restarts; then the page reconnects.
 async function selfUpdate() {
-  const ok = ask("Update the firmware?", `<p>The card receives <b class="fw-name"></b>, checks it, swaps it in and restarts, in about 20 s.
-     Keep the SP-202 off and the USB cable in.</p><p>Your pads and sample sets stay on the card, and the current firmware is kept: GO BACK returns to it.</p>`, "UPDATE");
+  const ok = ask("Update the firmware?", `<p>The card installs <b class="fw-name"></b> and restarts, in about 20 s.
+     Keep the SP-202 off and the USB cable in.</p><p>Your pads and sample sets stay on the card.</p>`, "UPDATE");
   $("dlg-body").querySelector(".fw-name").textContent = firmware.name;
   if (!await ok) return;
   let sentAll = false;
@@ -95,16 +101,25 @@ async function selfUpdate() {
     const sha = new Uint8Array(await crypto.subtle.digest("SHA-256", bin));
     await state.link.sendUpdate(bin, sha, (n, total) => {
       sentAll = n === total;
-      fwStatus(sentAll ? "Sent: the card checks it and swaps it in…" : `Sending ${firmware.name}: ${Math.round(100 * n / total)}%`);
+      fwStatus(sentAll ? "Installing…" : `Sending: ${Math.round(100 * n / total)}%`);
     });
-    fwStatus("Checked and swapped: the card is restarting…");
+    fwStatus("Restarting…");
   } catch (e) {
     // every chunk taken, then the link dropped: the card is checking, swapping or restarting
     if (!(sentAll && /disconnected/.test(e.message))) { fwStatus(`Update stopped: ${e.message}. The card keeps its firmware.`, "err"); return; }
-    fwStatus("The card is restarting…");
+    fwStatus("Restarting…");
   }
-  if (await reconnectCard()) fwStatus(`Done: the card now runs ${fwName(state.info?.banner) || "its new firmware"}.`, "ok");
-  else fwStatus("The card restarted: press CONNECT.", "ok");
+  if (await reconnectCard()) fwStatus(`Done: ${fwName(state.info?.banner) || "new firmware"}.`, "ok");
+  else fwStatus("Done: press CONNECT.", "ok");
+}
+
+// AUTO UPDATE: the latest firmware from smartmare.com, if it is newer than the card's.
+async function autoUpdate() {
+  await checkUpdates(false);
+  if (!latest) return;
+  const card = cardVersion();
+  if (card && !newer(latest.version, card)) { fwStatus(`Up to date (v${card}).`, "ok"); return; }
+  if (await getLatestFirmware()) await updateFirmware();
 }
 
 async function goBackFirmware() {
@@ -164,18 +179,18 @@ function downloadFirmware(why) {
 }
 
 function bindFirmware() {
+  // MANUAL UPDATE: pick a .uf2, it is checked and installed
   $("btn-fw-file").onclick = () => $("file-fw").click();
   $("file-fw").onchange = async e => {
     const f = e.target.files[0];
     e.target.value = "";
     if (!f) return;
     const bytes = new Uint8Array(await f.arrayBuffer()), err = checkUf2(bytes);
-    if (err) { firmware = null; $("fw-file").textContent = "no file chosen"; fwStatus(`${f.name}: ${err}.`, "err"); }
-    else { firmware = { name: f.name, bytes }; $("fw-file").textContent = `${f.name} · ${(bytes.length / 2 / 1024).toFixed(0)} KB of firmware`; fwStatus(""); }
-    renderFirmware();
+    if (err) { firmware = null; fwStatus(`${f.name}: ${err}.`, "err"); return; }
+    firmware = { name: f.name, bytes };
+    fwStatus("");
+    await updateFirmware();
   };
-  $("btn-fw-go").onclick = updateFirmware;
+  $("btn-fw-auto").onclick = autoUpdate;
   $("btn-fw-copy").onclick = copyFirmware;
-  $("btn-fw-back").onclick = goBackFirmware;
-  bindUpdate();
 }

@@ -3,7 +3,7 @@
   SmartMare 5V - generic loader: read, back up, restore and erase the card over USB
 
   Fabien Roffet for Electronic Stable - smartmare.com
-  Version 1.2.1 - 4 Nov 2026
+  Version 1.2.2 - 4 Nov 2026
   SPDX-License-Identifier: MIT
 -->
 <html lang="en">
@@ -70,18 +70,13 @@
       </div>
       <div class="tool">
         <div class="sub-head first">FIRMWARE UPDATE</div>
-        <p class="hint">What the card holds stays. CONNECT, then GET (or CHOOSE .UF2) and UPDATE: the card updates itself and restarts. Firmware before 1.2.0: COPY TO RP2350 and pick that drive.</p>
-        <div class="fw-file" id="fw-file">no file chosen</div>
-        <div class="fw-status" id="fw-now"></div>
+        <p class="hint">Pads and sample sets stay on the card.</p>
         <div class="fw-status" id="update-info"></div>
         <div class="fw-status" id="fw-status"></div>
         <div class="btn-row">
-          <button class="key small act" id="btn-fw-check" title="Asks smartmare.com for the latest firmware and Card Manager">CHECK UPDATES</button>
-          <button class="key small act" id="btn-fw-latest" hidden title="Gets the latest firmware from smartmare.com and checks it; then UPDATE">GET</button>
-          <button class="key small act" id="btn-fw-file">CHOOSE .UF2…</button>
-          <button class="key small act" id="btn-fw-go" disabled>UPDATE</button>
+          <button class="key small act" id="btn-fw-auto" disabled title="Gets the latest firmware from smartmare.com and installs it">AUTO UPDATE</button>
+          <button class="key small act" id="btn-fw-file" disabled title="Installs a firmware file (.uf2) from your computer">MANUAL UPDATE</button>
           <button class="key small act" id="btn-fw-copy" hidden>COPY TO RP2350…</button>
-          <button class="key small act" id="btn-fw-back" hidden>GO BACK</button>
         </div>
         <input type="file" id="file-fw" accept=".uf2" hidden>
       </div>
@@ -111,6 +106,7 @@
   <footer class="foot">SmartMare by Electronic Stable. SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland Corporation. SmartMare and Electronic Stable are not affiliated with them.</footer>
 </div>
 
+<div class="wait" id="wait" hidden><div id="wait-text">Please wait…</div></div>
 <div class="dropzone" id="dropzone"><div>Drop a <b>.img</b> card image to open it</div></div>
 
 <dialog id="dialog">

@@ -2,7 +2,7 @@
  * SmartMare 5V - the emulator: SP-202 and generic firmwares, USB commands
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * SmartMedia 5V card emulator for the Boss SP-202: an S4M-5 (4 MB, ID 98h 6Bh).

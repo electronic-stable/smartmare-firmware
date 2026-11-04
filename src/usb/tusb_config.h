@@ -2,7 +2,7 @@
  * SmartMare 5V - TinyUSB settings: serial port, reset interface, drive
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * TinyUSB for the emulator: the serial port (stdio, the card's commands), the

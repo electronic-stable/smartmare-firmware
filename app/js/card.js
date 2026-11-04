@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 card image: pad tables, samples, SmartMedia ECC
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.1 - 4 Nov 2026
+ * Version 1.2.2 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The SP-202 card image: 8192 pages of 528 bytes (512 data + 16 spare), as dumped by the
