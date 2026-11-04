@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 card image: pad tables, samples, SmartMedia ECC
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The SP-202 card image: 8192 pages of 528 bytes (512 data + 16 spare), as dumped by the
@@ -67,6 +67,9 @@ const SM = (() => {
   const putBe32 = (a, o, v) => { a[o] = v >>> 24; a[o + 1] = (v >>> 16) & 255; a[o + 2] = (v >>> 8) & 255; a[o + 3] = v & 255; };
 
   // ---------- the image ----------
+  // A size as the user reads it: KB under 1 MB, else MB.
+  const size = b => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+
   class Image {
     constructor(bytes) {
       this.img = bytes ? new Uint8Array(bytes) : new Uint8Array(IMAGE_BYTES).fill(0xFF);
@@ -160,12 +163,29 @@ const SM = (() => {
     isFormatted() { return ascii(this.img, PPB * PAGE, 6) === "Roland" && ascii(this.img, PPB * PAGE + 16, 11) === "BOSS SP-202"; }
   }
 
+  // ---------- BACKUP areas ----------
+  // A 4 MB card holds up to 7 BACKUPs of banks A/B (pads 1-7 pick the area; SP-202 service
+  // notes), 64 blocks each, filled one after another from the end of the card. Area 1 is
+  // blocks 448-511 (seen on card images); areas 2-7 are taken to sit just below it, 384-447 and
+  // so on (not seen yet). The areas found on an image: [1, 2, ...].
+  const AREA_BLOCKS = 64;
+  const areaBlock = k => BACKUP_BLOCK - AREA_BLOCKS * (k - 1);
+  function backupAreas(img) {
+    const out = [];
+    for (let k = 1; k <= 7; k++)
+      if (ascii(img.img, (areaBlock(k) + 62) * BLOCK_BYTES, 16) === "*Parameter Area*") out.push(k);
+    return out;
+  }
+  // Where the samples of banks C/D must stop: below backup area 1 (always kept free, the page
+  // does not know yet whether the SP-202 records over it) and below any other area found.
+  const cardDataEnd = img => Math.min(BACKUP_BLOCK, ...backupAreas(img).map(areaBlock)) * BLOCK_DATA;
+
   // ---------- a set of 16 pads: the card (C/D) or the BACKUP area (A/B) ----------
   const SPACES = {
     card: {
       banks: ["C", "D"], padBase: 0x10,
       param: 1 * BLOCK_DATA, table: 66,                       // physical block 1, page 0
-      dataStart: 2 * BLOCK_DATA, dataEnd: BACKUP_BLOCK * BLOCK_DATA,
+      dataStart: 2 * BLOCK_DATA,                              // dataEnd: cardDataEnd(image)
       toCard: a => a, header: img => img.isFormatted(),
     },
     backup: {
@@ -178,8 +198,17 @@ const SM = (() => {
   };
 
   class Space {
-    constructor(image, kind) {
+    // kind "card" (C/D) or "backup" (A/B), with area 1-7 for a backup (where the SP-202 saved it).
+    constructor(image, kind, area = 1) {
       this.image = image; this.kind = kind; Object.assign(this, SPACES[kind]);
+      if (kind === "card") this.dataEnd = cardDataEnd(image);
+      if (kind === "backup" && area !== 1) {
+        const base = areaBlock(area);
+        this.param = base * BLOCK_DATA + 62 * BLOCK_DATA;
+        this.toCard = a => base * BLOCK_DATA + (a - 0x20000);
+        this.header = img => ascii(img.img, (base + 62) * BLOCK_BYTES, 16) === "*Parameter Area*";
+      }
+      this.area = kind === "backup" ? area : 0;
     }
     present() { return this.header(this.image); }
     names() { return this.banks.flatMap(b => [1, 2, 3, 4, 5, 6, 7, 8].map(i => b + i)); }
@@ -214,7 +243,7 @@ const SM = (() => {
       for (const e of u) {
         if (e.start < this.dataStart || e.start + e.length > this.dataEnd) issues.push(`${e.name} is outside the sample area`);
         else if (e.start < at) issues.push(`${e.name} overlaps the previous sample`);
-        else if (e.start > at) issues.push(`gap of ${e.start - at} bytes before ${e.name}`);
+        else if (e.start > at) issues.push(`gap of ${size(e.start - at)} before ${e.name}`);
         at = Math.max(at, e.start + e.length);
       }
       return issues;
@@ -243,7 +272,7 @@ const SM = (() => {
       this.clear(i);
       const start = this.usedEnd();
       if (start + data.length > this.dataEnd)
-        throw new Error(`not enough memory: ${data.length} bytes needed, ${this.dataEnd - start} free`);
+        throw new Error(`not enough memory: ${size(data.length)} needed, ${size(this.dataEnd - start)} free`);
       this.image.write(this.toCard(start), data);
       const r = Uint8Array.from(entry26);
       r[0] = this.padBase + i;
@@ -273,5 +302,5 @@ const SM = (() => {
   }
 
   return { PAGE, DATA, PAGES, PPB, BLOCKS, BLOCK_BYTES, IMAGE_BYTES, BACKUP_BLOCK, GRADES, SHORT, RATES,
-           Image, Space, padFile, parsePadFile, ecc256 };
+           Image, Space, backupAreas, areaBlock, padFile, parsePadFile, ecc256 };
 })();

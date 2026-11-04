@@ -2,17 +2,19 @@
 SmartMare 5V - packs the loader page into the firmware's USB drive
 
 Fabien Roffet for Electronic Stable - smartmare.com
-Version 1.0.0 - 2 Nov 2026
+Version 1.2.0 - 4 Nov 2026
 SPDX-License-Identifier: GPL-3.0-or-later
 
-The files of the SmartMare USB drive: the Pad Editor in one HTML file, and a README.
+The files of the SmartMare USB drive: the card manager page in one HTML file, and a README.
 
 Inlines app/sp-202_loader.html (its style sheet and scripts) into one file and writes it, with the
 README, as C arrays for the firmware. src/usb/usb_drive.c builds the FAT disk around them
 at run time, with the sample sets kept on the card shown as more files. Run by CMake at
 each build; by hand:
 
-    python tools/build_drive.py build/drive_files.c [--html build/SmartMare_Pad_Editor.html]
+    python tools/build_drive.py build/drive_files.c [--html build/smartmare-sp-202-card-manager-v1.1.0.html]
+
+The version (in the page and the file names) is the firmware's, from CMakeLists.txt.
 """
 import argparse
 import datetime
@@ -21,6 +23,9 @@ import re
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 APP = os.path.join(ROOT, "app")
+VERSION = re.search(r"project\([^)]*VERSION (\d+\.\d+\.\d+)", open(os.path.join(ROOT, "CMakeLists.txt"), encoding="utf8").read()).group(1)
+SP202_PAGE = f"smartmare-sp-202-card-manager-v{VERSION}.html"
+GENERIC_PAGE = f"smartmare-generic-card-manager-v{VERSION}.html"
 
 LICENCES = """Open source: the card's firmware is free software under the GNU General Public
 License v3 or later, and this page is under the MIT licence. Both come with no
@@ -33,17 +38,19 @@ README = """SmartMare - by Electronic Stable
 
 This drive is the SmartMare card itself.
 
-"SmartMare Pad Editor.html" manages the card's pads:
+"%PAGE%" manages the card's pads:
 1. Open it in Chrome or Edge (Opera and Brave work too; Firefox and Safari cannot
    open USB serial ports).
 2. Keep the SP-202 off, press CONNECT and pick the SmartMare port.
 3. READ CARD shows banks C/D (the card) and A/B (the SP-202 backup bank).
    Copy pads, change their settings, drop audio files on pads, then WRITE CARD.
 
-The "Sample Sets" folder holds the sample sets saved on the card (SAVE SET TO CARD in
-the editor). Copy them to your computer to keep them; LOAD SETS opens them.
+The "Sample Sets" folder has a folder for each sample set saved on the card (SAVE SET
+TO CARD in the editor): its .smartmare file, which LOAD SETS opens, and every pad of
+the set as a WAV file. Copy them to your computer to keep them.
 
-The drive is read-only. Not affiliated with Roland or BOSS.
+The drive is read-only. SmartMedia is a trademark of Toshiba; Roland and BOSS are
+trademarks of Roland Corporation. SmartMare is not affiliated with them.
 
 """ + LICENCES
 
@@ -53,7 +60,7 @@ README_GENERIC = """SmartMare - by Electronic Stable
 
 This drive is the SmartMare card itself: a 4MB 5V card that emulates SmartMedia.
 
-"SmartMare Card Manager.html" looks after the card:
+"%PAGE%" looks after the card:
 1. Open it in Chrome or Edge (Opera and Brave work too; Firefox and Safari cannot
    open USB serial ports).
 2. Take the card out of the device, press CONNECT and pick the SmartMare port.
@@ -61,8 +68,8 @@ This drive is the SmartMare card itself: a 4MB 5V card that emulates SmartMedia.
    OPEN CARD BACKUP and WRITE CARD put a copy back. ERASE CARD gives a blank card,
    to format in the device. FIRMWARE UPDATE installs a new firmware.
 
-The drive is read-only. Not affiliated with Roland, BOSS or the owners of the
-SmartMedia trademark.
+The drive is read-only. SmartMedia is a trademark of Toshiba; Roland and BOSS are
+trademarks of Roland Corporation. SmartMare is not affiliated with them.
 
 """ + LICENCES
 
@@ -79,7 +86,7 @@ def single_html(page="sp-202_loader.html"):
 
     html = re.sub(r'<link rel="stylesheet" href="([^"]+)">', css, html)
     html = re.sub(r'<script src="([^"]+)"></script>', js, html)
-    return html.encode("utf8")
+    return html.replace("%VERSION%", VERSION).encode("utf8")
 
 
 def c_array(f, name, data):
@@ -94,10 +101,11 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out_c")
     ap.add_argument("--html", help="also write the single-file page here")
-    ap.add_argument("--generic", action="store_true", help="the generic card: Card Manager (app/generic_loader.html)")
+    ap.add_argument("--generic", action="store_true", help="the generic card: Generic Card Manager (app/generic_loader.html)")
     a = ap.parse_args()
     page = single_html("generic_loader.html" if a.generic else "sp-202_loader.html")
-    readme = (README_GENERIC if a.generic else README).replace("\n", "\r\n").encode("ascii")
+    readme = (README_GENERIC if a.generic else README).replace("%PAGE%", GENERIC_PAGE if a.generic else SP202_PAGE)
+    readme = readme.replace("\n", "\r\n").encode("ascii")
     now = datetime.datetime.now()
     with open(a.out_c, "w") as f:
         f.write("// Generated by tools/build_drive.py from app/: do not edit.\n#include <stdint.h>\n\n")

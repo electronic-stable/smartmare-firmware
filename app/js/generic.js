@@ -2,10 +2,10 @@
  * SmartMare 5V - generic loader page: read, back up, restore and erase the card
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
- * SmartMare Card Manager: the page of the generic card (any device with a 5 V SmartMedia
+ * SmartMare Generic Card Manager: the page of the generic card (any device with a 5 V SmartMedia
  * slot). The card as a whole: read it, keep and put back its image, update the firmware,
  * erase it. No pad editing: the device's own format is not known here.
  * Card model in card.js, USB in serial.js, firmware update in firmware.js.
@@ -42,7 +42,7 @@ function note(text, cls = "") {
 }
 function display(text, label) {
   Segments.render($("display"), text);
-  if (label !== undefined) $("display-label").textContent = label;
+  if (label !== undefined && $("display-label")) $("display-label").textContent = label;
 }
 function download(bytes, name) {
   const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
@@ -129,7 +129,6 @@ function renderButtons() {
   $("btn-write").classList.toggle("lit", writable);
   $("write-count").textContent = state.base ? (dirty ? `${dirty} BLOCK${dirty > 1 ? "S" : ""}` : "") : (state.work ? "IMAGE" : "");
   $("btn-save").disabled = !state.work;
-  $("btn-revert").disabled = !state.base || !dirty || state.busy;
   $("btn-erase").disabled = !linked || powered || state.busy || !info.canWrite;
   $("btn-status").disabled = !linked;
   $("btn-loglevel").disabled = !linked;
@@ -160,7 +159,7 @@ function onInfo(info) {
                   h.unerased && `${h.unerased} programs over unerased pages`, h.queued && `${h.queued} reads with nothing queued`,
                   h.late && `${h.late} late data changes`].filter(Boolean);
     check("health", errs.length ? "warn" : "ok", errs.length ? errs.join(", ")
-          : `no errors · ${(h.reads ?? 0).toLocaleString()} bytes read by the device checked`);
+          : `no errors · ${(h.reads ?? 0) >= 1048576 ? `${((h.reads ?? 0) / 1048576).toFixed(1)} MB` : `${Math.round((h.reads ?? 0) / 1024)} KB`} read by the device checked`);
     $("led-health").className = "led " + (errs.length ? "amber" : "on");
   }
   $("led-power").className = "led " + (info.powered ? "amber blink" : "");
@@ -185,11 +184,11 @@ function onClose() {
 
 const NO_SERIAL = "This browser cannot open USB serial ports. Open this page in Chrome or Edge. Firefox and Safari cannot.";
 
-async function connect() {
-  if (state.link) { await state.link.disconnect(); return; }
+async function connect(port) {
+  if (state.link) { if (!port) await state.link.disconnect(); return; }
   if (!CardLink.supported()) { log(NO_SERIAL, "err"); note(NO_SERIAL, "err"); return; }
   const link = new CardLink({ onLine, onInfo, onClose });
-  try { await link.connect(); }
+  try { await link.connect(port); }
   catch (e) { if (e.name !== "NotFoundError") log(`connection failed: ${e.message}`, "err"); return; }
   state.link = link;
   $("led-usb").className = "led on";
@@ -215,7 +214,7 @@ async function readCard() {
     state.work = img.clone();
     state.source = "the card";
     log(`card read in ${((performance.now() - t0) / 1000).toFixed(1)} s: ${img.usedBlocks().length} blocks used`, "info");
-    note("Card read. SAVE CARD BACKUP keeps a copy.", "ok");
+    note("Card read. SAVE BACKUP keeps a copy (CARD IMAGE).", "ok");
     display("rd", "CARD READ");
   } catch (e) { log(e.message, "err"); note(e.message, "err"); }
   finally { state.busy = false; render(); }
@@ -226,11 +225,11 @@ async function writeCard() {
   state.busy = true;
   renderButtons();
   try {
-    if (!state.base) {
-      log("reading the card first, to send only what changes", "info");
-      display("rd", "READING");
-      state.base = await link.dump(p => display(String(Math.min(99, Math.round(100 * p / 8192))), `READING ${p} PAGES`));
-    }
+    // Always read the card again: the device may have changed it since the last READ CARD, and
+    // comparing with an old copy would skip blocks that look unchanged here but are not.
+    log("reading the card first, to send what differs from what it really holds", "info");
+    display("rd", "READING");
+    state.base = await link.dump(p => display(String(Math.min(99, Math.round(100 * p / 8192))), `READING ${p} PAGES`));
     const blocks = dirtyBlocks();
     if (!blocks.length) { note("Nothing to write: the card already holds this image.", "ok"); return; }
     state.busy = false;
@@ -262,7 +261,7 @@ function openImage(bytes, name) {
 // ---------- erase ----------
 async function eraseCard() {
   const ok = ask("Erase the card?", `<p>Everything the device stored on the card is erased. It cannot be undone.</p>
-     <p>To keep it, SAVE CARD BACKUP first.</p>
+     <p>To keep it, SAVE BACKUP (CARD IMAGE) first.</p>
      <p>Type <b>ERASE</b> to confirm:</p><input id="erase-confirm" autocomplete="off" spellcheck="false">`, "ERASE");
   const input = $("erase-confirm"), okBtn = $("dlg-ok");
   okBtn.disabled = true;
@@ -288,7 +287,7 @@ async function eraseCard() {
 
 // ---------- events ----------
 function bind() {
-  $("btn-connect").onclick = connect;
+  $("btn-connect").onclick = () => connect();      // not connect(event): it takes a port
   $("btn-read").onclick = readCard;
   $("btn-write").onclick = writeCard;
   $("btn-save").onclick = () => {
@@ -297,7 +296,6 @@ function bind() {
   };
   $("btn-open").onclick = () => $("file-open").click();
   $("file-open").onchange = async e => { const f = e.target.files[0]; if (f) openImage(new Uint8Array(await f.arrayBuffer()), f.name); e.target.value = ""; };
-  $("btn-revert").onclick = () => { state.work = state.base.clone(); state.source = "the card"; log("back to what the card holds"); render(); };
   $("btn-erase").onclick = eraseCard;
   $("btn-status").onclick = () => state.link?.send("s");
   $("btn-loglevel").onclick = () => state.link?.send("v");
@@ -326,7 +324,7 @@ function start() {
   if (CardLink.supported()) check("browser", "ok", "Web Serial available");
   else { check("browser", "fail", "use Chrome, Edge, Opera or Brave on a computer"); note(NO_SERIAL, "err"); }
   check("usb", "wait", "press CONNECT and pick the card");
-  display("rdy", "READY");
+  display("---", "READY");
   render();
   log("ready. CONNECT the card (out of the device) to read it, back it up, update or erase it.", "info");
 }

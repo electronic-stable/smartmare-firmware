@@ -32,19 +32,21 @@ A 4 MB 5 V SmartMedia card. Two firmwares, for the same card:
 
 | Firmware | For | Loader page on the card's USB drive |
 |---|---|---|
-| `smartmedia_5v_sp-202_v<version>.uf2` | the BOSS SP-202: pads, sample sets, backup bank | `app/sp-202_loader.html` |
-| `smartmedia_5v_generic_v<version>.uf2` | any gear with a 5 V 4 MB SmartMedia slot | `app/generic_loader.html` |
+| `smartmare-5v-sp-202-firmware-v<version>.uf2` | the BOSS SP-202: pads, sample sets, backups of banks A/B | SP-202 Card Manager (`app/sp-202_loader.html`) |
+| `smartmare-5v-generic-firmware-v<version>.uf2` | any gear with a 5 V 4 MB SmartMedia slot | Generic Card Manager (`app/generic_loader.html`) |
 
 ## SmartMare 3.3V
 A 16 MB 3.3 V SmartMedia card, for the BOSS SP-303 and other 3.3 V gear. **Coming soon:** the
 board is designed, its firmware is not in this repository yet. It will follow the same names
-(`smartmedia_3v3_..._v<version>.uf2`).
+(`smartmare-3v3-..._v<version>.uf2`).
 
 ## What is here
 - `src/` — the firmware: SmartMedia command set, the bus (PIO + DMA), the image in flash, USB.
 - `boards/` — the board definition for the Pico SDK (RP2350A, 12 MHz crystal, 16 MB flash; SmartMare 5V).
-- `app/` — the loader pages. The build packs them into the firmware (`tools/build_drive.py`),
-  so the card shows them on a small read-only USB drive.
+- `app/` — the Card Manager pages. The build packs them into the firmware (`tools/build_drive.py`),
+  so the card shows them on a small read-only USB drive. The latest ones are also online:
+  https://smartmare.com/app/sp-202-card-manager.html and https://smartmare.com/app/generic-card-manager.html.
+- `tools/self_update.py` — the one-click firmware update from a computer (what the pages' UPDATE does).
 - `tests/` — a simulated SmartMedia host, used by the self-test firmware.
 
 ## Build
@@ -69,8 +71,9 @@ The firmwares land in `build/`:
 
 | File | What it is |
 |---|---|
-| `smartmedia_5v_sp-202_v<version>.uf2` | SmartMare 5V, SP-202 firmware |
-| `smartmedia_5v_generic_v<version>.uf2` | SmartMare 5V, generic firmware |
+| `smartmare-5v-sp-202-firmware-v<version>.uf2` | SmartMare 5V, SP-202 firmware |
+| `smartmare-5v-generic-firmware-v<version>.uf2` | SmartMare 5V, generic firmware |
+| `smartmare-sp-202-card-manager-v<version>.html`, `smartmare-generic-card-manager-v<version>.html` | the Card Manager pages, as on the card |
 | `smartmedia_selftest.uf2` | self test: checks the card against a simulated host. **It overwrites the card's memory**; load a normal firmware afterwards |
 | `smartmedia_bringup.uf2` | first power-on checks of a new board |
 
@@ -78,12 +81,18 @@ The firmwares land in `build/`:
 **Take the card out of your gear (or switch the gear off) before connecting it to a computer.**
 Then connect the card by USB-C.
 
-- **With picotool** (the card restarts into its update mode by itself):
+- **From the Card Manager (firmware 1.2.0 and later):** open the page from the card's USB drive
+  (or online) in Chrome or Edge, CONNECT, then CHOOSE .UF2 (or GET the latest) and UPDATE. The card
+  receives the firmware over USB, checks its SHA-256, swaps it in and restarts; the previous one is
+  kept, and GO BACK returns to it. The same from a computer:
   ```
-  picotool load -f -x build/smartmedia_5v_sp-202_v1.0.0.uf2
+  python tools/self_update.py build/smartmare-5v-sp-202-firmware-v1.2.0.uf2
+  python tools/self_update.py --back
   ```
-- **From the loader page:** open the page from the card's USB drive in Chrome or Edge,
-  CONNECT, then use its firmware update.
+- **With picotool** (any firmware; the card restarts into its update mode by itself):
+  ```
+  picotool load -f -x build/smartmare-5v-sp-202-firmware-v1.2.0.uf2
+  ```
 - **By hand:** when the card is in update mode a drive called **RP2350** appears; copy the
   `.uf2` file onto it and the card restarts by itself. A card with no firmware at all starts
   in update mode when its BOOT pad is held to GND at power-up.

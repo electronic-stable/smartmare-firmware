@@ -2,7 +2,7 @@
  * SmartMare 5V - the emulator: SP-202 and generic firmwares, USB commands
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * SmartMedia 5V card emulator for the Boss SP-202: an S4M-5 (4 MB, ID 98h 6Bh).
@@ -24,6 +24,12 @@
  * - A watchdog restarts a stuck firmware; the next boot says which step it was stuck in.
  * - LED: slow blink = no card power; on = active, with a short blink-off on each flash job.
  */
+#if SMARTMARE_RESEARCH
+#include "research_listen.h"
+#define RESEARCH_TAG "RESEARCH "
+#else
+#define RESEARCH_TAG ""
+#endif
 #include <stdio.h>
 
 #include "hardware/clocks.h"
@@ -36,6 +42,7 @@
 #include "board_pins.h"
 #include "card_if.h"
 #include "crc32.h"
+#include "fw_update.h"
 #include "sm_bus.h"
 #include "sm_core.h"
 #include "sm_flash_storage.h"
@@ -233,14 +240,14 @@ static void print_help(void) {
     end_line();
 #if SMARTMARE_GENERIC
     printf("\n== SmartMare 5V generic firmware v" SMARTMARE_FW_VERSION ", SmartMedia emulator, generic 4 MB 5 V card, ID %02Xh %02Xh, clk_sys %lu MHz, board v0.%u (ALE GPIO%u, WE GPIO%u) ==\n",
-           MAKER_ID, SM_DEVICE_ID_4MB_5V, (unsigned long)(clock_get_hz(clk_sys) / 1000000), board_rev, pin_ale, pin_we_n);
+           MAKER_ID, SM_DEVICE_ID, (unsigned long)(clock_get_hz(clk_sys) / 1000000), board_rev, pin_ale, pin_we_n);
     printf("keys: s = status, r = raw bus samples and wrong reads, v = log level (quiet / all / jobs), D = dump the image (B = one block again), W = write blocks (tools/write_image.py), "
-           "E = erase the whole image (blank card), h = this help\n");
+           "E = erase the whole image (blank card), U/K/u = firmware update / go back / previous, h = this help\n");
 #else
-    printf("\n== SmartMare 5V SP-202 firmware v" SMARTMARE_FW_VERSION ", SmartMedia emulator, S4M-5 4 MB, ID %02Xh %02Xh, clk_sys %lu MHz, board v0.%u (ALE GPIO%u, WE GPIO%u) ==\n",
-           MAKER_ID, SM_DEVICE_ID_4MB_5V, (unsigned long)(clock_get_hz(clk_sys) / 1000000), board_rev, pin_ale, pin_we_n);
+    printf("\n== SmartMare 5V SP-202 " RESEARCH_TAG "firmware v" SMARTMARE_FW_VERSION ", SmartMedia emulator, S4M-5 4 MB, ID %02Xh %02Xh, clk_sys %lu MHz, board v0.%u (ALE GPIO%u, WE GPIO%u) ==\n",
+           MAKER_ID, SM_DEVICE_ID, (unsigned long)(clock_get_hz(clk_sys) / 1000000), board_rev, pin_ale, pin_we_n);
     printf("keys: s = status, r = raw bus samples and wrong reads, v = log level (quiet / all / jobs), D = dump the image (B = one block again), W = write blocks (tools/write_image.py), p = pad table (also while on), L/S/G/X = sample sets, "
-           "E = erase the 4 MB image, Z = erase everything (image and sample sets), h = this help\n");
+           "E = erase the 4 MB image, Z = erase everything (image and sample sets), U/K/u = firmware update / go back / previous, h = this help\n");
 #endif
     printf("log level: %s\n", log_level == LOG_ALL ? "all" : log_level == LOG_JOBS ? "jobs" : "quiet");
     if (wd_reboot) {
@@ -466,8 +473,13 @@ static void erase_everything(void) {
 #define WRITE_BLOCK_BYTES (SM_PAGES_PER_BLK * SM_PAGE_SIZE)
 
 static int read_byte(void) {
-    watchdog_update();
-    return getchar_timeout_us(3000000);
+    // up to 3 s, in slices: the watchdog (2 s) must keep being fed while the PC is slow
+    for (int i = 0; i < 6; i++) {
+        watchdog_update();
+        int c = getchar_timeout_us(500000);
+        if (c != PICO_ERROR_TIMEOUT) return c;
+    }
+    return PICO_ERROR_TIMEOUT;
 }
 
 static void write_image(void) {
@@ -703,6 +715,12 @@ static void print_raw(void) {
 
 static void handle_key(int c) {
     switch (c) {
+#if SMARTMARE_RESEARCH
+    case 'q': research_listen_print(); break;
+    case 'Q': research_listen_clear(); break;
+    case 't': research_timing_print(); break;
+    case 'T': research_timing_clear(); printf("timing: cleared\n"); break;
+#endif
     case 's': print_status(); break;
     case 'r': print_raw(); break;
     case 'v':
@@ -714,6 +732,9 @@ static void handle_key(int c) {
     case 'D': dump_image(); break;
     case 'B': dump_one_block(); break;
     case 'W': write_image(); break;
+    case 'U': end_line(); fw_update_receive(powered); break;
+    case 'K': end_line(); fw_update_back(powered); break;
+    case 'u': end_line(); fw_update_info(); break;
 #if !SMARTMARE_GENERIC
     case 'Z': erase_everything(); break;
     case 'p': print_param_page(); break;
@@ -734,7 +755,9 @@ int main(void) {
     card_if_vcc_init();
     stdio_init_all();
 
-    wd_reboot = watchdog_caused_reboot();
+    // the restart that ends a firmware update is the watchdog's too, but on purpose
+    bool update_restart = watchdog_hw->scratch[0] == FW_UPDATE_RESTART;
+    wd_reboot = watchdog_caused_reboot() && !update_restart;
     if (watchdog_hw->scratch[0] == CRUMB_MAGIC)
         for (int i = 0; i < 3; i++)
             last_crumb[i] = watchdog_hw->scratch[1 + i];
@@ -749,6 +772,10 @@ int main(void) {
     bool layout_ok = sm_flash_storage_layout_ok();
     if (layout_ok)
         sm_bus_init(&core);                  // starts inactive
+#if SMARTMARE_RESEARCH
+    research_listen_init();                  // pio1, input only
+    research_timing_init();                  // pio2, input only
+#endif
 
     // A stuck firmware restarts by itself after 2 s (the longest flash job is ~0.4 s).
     watchdog_enable(2000, true);
@@ -758,6 +785,10 @@ int main(void) {
     bool core1_stuck = false;
     while (true) {
         watchdog_update();
+#if SMARTMARE_RESEARCH
+        research_listen_poll();
+        research_timing_poll();
+#endif
         service_jobs();
         uint32_t now = to_ms_since_boot(get_absolute_time());
 

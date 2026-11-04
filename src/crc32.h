@@ -2,7 +2,7 @@
  * SmartMare 5V - CRC-32 for image dumps and sample sets
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * CRC-32 (zlib's), shared by the image dump (main.c) and the sample sets (set_store.c).

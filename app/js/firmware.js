@@ -2,10 +2,10 @@
  * SmartMare 5V - firmware update from the loader pages
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
- * Firmware update, shared by the Pad Editor (app.js) and the generic card's page
+ * Firmware update, shared by the SP-202 Card Manager (app.js) and the generic card's page
  * (generic.js). Uses the page's globals: $, state (link, info, busy), log, ask, download.
  */
 "use strict";
@@ -34,13 +34,95 @@ function fwStatus(text, cls = "") {
   if (text) log(`firmware: ${text}`, cls === "err" ? "err" : "info");
 }
 
+// "SP-202 firmware v1.2.0" (or "SP-202 RESEARCH firmware v1.2.0") from the card's banner.
+const fwName = banner => (banner || "").match(/5V (.*?firmware v\d+\.\d+\.\d+)/)?.[1] || "";
+
 function renderFirmware() {
   const powered = state.info?.powered === true;
   $("btn-fw-go").disabled = !firmware || !state.link || powered || state.busy;
   $("btn-fw-go").title = !firmware ? "Choose a .uf2 file first" : !state.link ? "CONNECT the card first" : powered ? "Switch the SP-202 off" : "";
+  const prev = state.link && !powered && !state.busy ? state.info?.previousFw : null;
+  $("btn-fw-back").hidden = !prev;
+  if (prev) $("btn-fw-back").title = `Back to the card's previous firmware: ${prev}`;
+  // what runs and what is kept, in words (both may have the same version number)
+  const now = fwName(state.info?.banner);
+  $("fw-now").textContent = state.link && now ? `Running: ${now}${prev ? ` · kept for GO BACK: ${prev}` : ""}.` : "";
+  updateSeen();
+}
+
+// A UF2 file's flash content as one binary from 0x10000000 (what the card's self-update takes).
+function uf2ToBin(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = 0;
+  const parts = [];
+  for (let o = 0; o + 512 <= bytes.length; o += 512) {
+    const addr = dv.getUint32(o + 12, true), size = dv.getUint32(o + 16, true);
+    // skip the "absolute" family block (0xE48BFF57, an RP2350 boot ROM workaround near the end of flash)
+    if ((dv.getUint32(o + 8, true) & 0x2000) && dv.getUint32(o + 28, true) === 0xE48BFF57) continue;
+    if (addr < 0x10000000 || addr >= 0x11000000) continue;
+    parts.push([addr - 0x10000000, bytes.subarray(o + 32, o + 32 + size)]);
+    end = Math.max(end, addr - 0x10000000 + size);
+  }
+  const bin = new Uint8Array(end).fill(0xFF);
+  for (const [at, d] of parts) bin.set(d, at);
+  return bin;
+}
+
+// After the card restarts, CONNECT again by itself (the port is already allowed).
+async function reconnectCard() {
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 750));
+    if (state.link) return true;
+    for (const p of await navigator.serial.getPorts()) {
+      if (p.getInfo().usbVendorId !== 0x2E8A) continue;
+      try { await connect(p); } catch (e) {}
+      if (state.link) return true;
+    }
+  }
+  return false;
+}
+
+// One-click update (card firmware 1.2.0+): the firmware goes over the open link, the card checks
+// it, swaps it in (keeping the old one) and restarts; then the page reconnects.
+async function selfUpdate() {
+  const ok = ask("Update the firmware?", `<p>The card receives <b class="fw-name"></b>, checks it, swaps it in and restarts, in about 20 s.
+     Keep the SP-202 off and the USB cable in.</p><p>Your pads and sample sets stay on the card, and the current firmware is kept: GO BACK returns to it.</p>`, "UPDATE");
+  $("dlg-body").querySelector(".fw-name").textContent = firmware.name;
+  if (!await ok) return;
+  let sentAll = false;
+  try {
+    const bin = uf2ToBin(firmware.bytes);
+    const sha = new Uint8Array(await crypto.subtle.digest("SHA-256", bin));
+    await state.link.sendUpdate(bin, sha, (n, total) => {
+      sentAll = n === total;
+      fwStatus(sentAll ? "Sent: the card checks it and swaps it in…" : `Sending ${firmware.name}: ${Math.round(100 * n / total)}%`);
+    });
+    fwStatus("Checked and swapped: the card is restarting…");
+  } catch (e) {
+    // every chunk taken, then the link dropped: the card is checking, swapping or restarting
+    if (!(sentAll && /disconnected/.test(e.message))) { fwStatus(`Update stopped: ${e.message}. The card keeps its firmware.`, "err"); return; }
+    fwStatus("The card is restarting…");
+  }
+  if (await reconnectCard()) fwStatus(`Done: the card now runs ${fwName(state.info?.banner) || "its new firmware"}.`, "ok");
+  else fwStatus("The card restarted: press CONNECT.", "ok");
+}
+
+async function goBackFirmware() {
+  const prev = state.info?.previousFw;
+  if (!prev || !await ask("Go back?", `<p>The card swaps back to its previous firmware, <b class="fw-name"></b>, and restarts. Your pads and sample sets stay.</p>`, "GO BACK")) return;
+  try {
+    await state.link.goBack();
+    fwStatus("Swapped back: the card is restarting…");
+  } catch (e) {
+    if (!/disconnected/.test(e.message)) { fwStatus(`Not done: ${e.message}.`, "err"); return; }
+    fwStatus("The card is restarting…");
+  }
+  if (await reconnectCard()) fwStatus(`Done: the card now runs ${fwName(state.info?.banner) || "its new firmware"}.`, "ok");
+  else fwStatus("The card restarted: press CONNECT.", "ok");
 }
 
 async function updateFirmware() {
+  if (state.info?.canSelfUpdate) return selfUpdate();
   const ok = ask("Update the firmware?", `<p>The card restarts in update mode for <b class="fw-name"></b>. Keep the SP-202 off and the USB cable in.</p>
      <p>Your pads and sample sets stay on the card.</p>`, "UPDATE");
   $("dlg-body").querySelector(".fw-name").textContent = firmware.name;
@@ -94,4 +176,6 @@ function bindFirmware() {
   };
   $("btn-fw-go").onclick = updateFirmware;
   $("btn-fw-copy").onclick = copyFirmware;
+  $("btn-fw-back").onclick = goBackFirmware;
+  bindUpdate();
 }

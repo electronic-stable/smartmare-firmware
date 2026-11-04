@@ -2,7 +2,7 @@
  * SmartMare 5V - the card over USB (Web Serial): commands, dump and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The emulator over USB (Web Serial): text lines in, keys and blocks out.
@@ -23,8 +23,10 @@ class CardLink {
 
   static supported() { return "serial" in navigator; }
 
-  async connect() {
-    const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x2E8A }] });
+  // port: one already allowed (navigator.serial.getPorts(), to reconnect after the card restarts),
+  // or none to let the user pick it.
+  async connect(port) {
+    port = port || await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x2E8A }] });
     await port.open({ baudRate: 115200, bufferSize: 1 << 16 });
     await port.setSignals({ dataTerminalReady: true, requestToSend: true });
     this.port = port;
@@ -36,6 +38,7 @@ class CardLink {
     // in case it already did.
     await this.send("h");
     await this.send("s");
+    await this.send("u");                    // the previous firmware kept for GO BACK, if any
   }
 
   // Frees the port for other programs: stop the read loop first (it would take the port
@@ -112,8 +115,19 @@ class CardLink {
 
   // What the firmware tells about itself: banner, keys, power and health.
   parse(t) {
-    if (t.startsWith("== SmartMedia emulator")) { this.info.firmware = true; this.info.banner = t.replace(/=/g, "").trim(); }
-    if (t.startsWith("keys:")) { this.info.canWrite = /W = write/.test(t); this.info.canDump = /D = dump/.test(t); }
+    // "== SmartMare 5V SP-202 firmware v1.1.0, SmartMedia emulator, ..." (before 1.0.0: "== SmartMedia emulator, ...")
+    if (/^== (SmartMare|SmartMedia emulator)/.test(t)) {
+      this.info.firmware = true;
+      this.info.banner = t.replace(/=/g, "").trim();
+      this.info.fwVersion = (t.match(/firmware v(\d+\.\d+\.\d+)/) || [])[1] || null;
+    }
+    if (t.startsWith("keys:")) {
+      this.info.canWrite = /W = write/.test(t); this.info.canDump = /D = dump/.test(t);
+      this.info.canSelfUpdate = /U\/K\/u = firmware update/.test(t);     // firmware 1.2.0 and later
+    }
+    const prev = t.match(/^update: previous (.+) (\d+)$/);
+    if (prev) this.info.previousFw = prev[1];
+    if (t === "update: none") this.info.previousFw = null;
     if (t.startsWith("ERROR: the firmware overlaps")) this.info.layoutOk = false;
     if (/card power ON/.test(t)) this.info.powered = true;
     if (/card power OFF/.test(t)) this.info.powered = false;
@@ -302,6 +316,52 @@ class CardLink {
       await this.writer.write(new Uint8Array([0x58, index]));       // 'X' i
       const r = await done;
       if (r.startsWith("ERR")) throw new Error(r.slice(4));
+    });
+  }
+
+  // One-click update (firmware 1.2.0+): sends the firmware (binary, from 0x10000000) in 4 KB
+  // chunks into the card's staging area; the card checks its SHA-256, swaps it with the running
+  // firmware (kept for goBack) and restarts. progress(done, total).
+  sendUpdate(bin, sha, progress) {
+    return this.exclusive(async () => {
+      const ready = this.waitFor(t => t.startsWith("UPDATE ready") || t.startsWith("ERR") || t.startsWith("refused"), 8000);
+      const hdr = new Uint8Array(1 + 4 + 32);
+      hdr[0] = 0x55;                                                  // 'U'
+      new DataView(hdr.buffer).setUint32(1, bin.length);
+      hdr.set(sha, 5);
+      await this.writer.write(hdr);
+      const r = await ready;
+      if (!r.startsWith("UPDATE ready")) throw new Error(r);
+      const chunks = Math.ceil(bin.length / 4096);
+      for (let c = 0; c < chunks; c++) {
+        const pkt = new Uint8Array(1 + 4096 + 2).fill(0xFF);
+        pkt[0] = 0x43;                                                // 'C'
+        pkt.set(bin.subarray(c * 4096, (c + 1) * 4096), 1);
+        let sum = 0;
+        for (let i = 1; i <= 4096; i++) sum = (sum + pkt[i]) & 0xFFFF;
+        pkt[4097] = sum >> 8; pkt[4098] = sum & 0xFF;
+        const ok = this.waitFor(t => t === `OK ${c}` || t.startsWith("ERR"), 10000);
+        await this.writer.write(pkt);
+        const a = await ok;
+        if (a.startsWith("ERR")) throw new Error(a);
+        progress?.(c + 1, chunks);
+      }
+      const v = await this.waitFor(t => t.startsWith("UPDATE verified") || t.startsWith("ERR"), 20000);
+      if (v.startsWith("ERR")) throw new Error(v);
+      const d = await this.waitFor(t => t.startsWith("UPDATE done") || t.startsWith("ERR"), 90000);
+      if (d.startsWith("ERR")) throw new Error(d);
+    });
+  }
+
+  // GO BACK: the card swaps back to the firmware it kept and restarts.
+  goBack() {
+    return this.exclusive(async () => {
+      const first = this.waitFor(t => t.startsWith("UPDATE back") || t.startsWith("ERR") || t.startsWith("refused"), 20000);
+      await this.send("K");
+      const r = await first;
+      if (!r.startsWith("UPDATE back")) throw new Error(r);
+      const d = await this.waitFor(t => t.startsWith("UPDATE done") || t.startsWith("ERR"), 90000);
+      if (d.startsWith("ERR")) throw new Error(d);
     });
   }
 

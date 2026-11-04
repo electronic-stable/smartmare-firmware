@@ -2,7 +2,7 @@
  * SmartMare 5V - bring-up firmware: first power-on checks of a new board
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Bring-up firmware for the SmartMedia 5V emulator v0.2.

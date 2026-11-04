@@ -2,10 +2,10 @@
  * SmartMare 5V - SP-202 loader page: pads, trims, sample sets, card read and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  */
-/* SmartMare Pad Editor: the page. Card model in card.js, USB in serial.js. */
+/* SmartMare SP-202 Card Manager: the page. Card model in card.js, USB in serial.js. */
 "use strict";
 
 const $ = id => document.getElementById(id);
@@ -45,7 +45,7 @@ function note(text, cls = "") {
 // ---------- display ----------
 function display(text, label) {
   Segments.render($("display"), text);
-  if (label !== undefined) $("display-label").textContent = label;
+  if (label !== undefined && $("display-label")) $("display-label").textContent = label;
 }
 
 // ---------- checks ----------
@@ -94,13 +94,16 @@ function imageChecks() {
   const bk = new SM.Space(w, "backup");
   if (bk.present()) {
     const issues = bk.check();
-    check("backup", issues.length ? "warn" : "ok", issues.length ? issues.join("; ") : `present: ${bk.used().length} internal pads saved`);
+    const areas = SM.backupAreas(w);
+    check("backup", issues.length ? "warn" : "ok", issues.length ? issues.join("; ")
+      : `present: backup${areas.length > 1 ? `s ${areas.join(", ")}` : " 1"} (pick one beside CARD BACKUP)`);
   } else check("backup", "warn", "none on the card. On the SP-202: CANCEL + BANK CARD C/D, then REC, to save banks A/B here");
 }
 
 // ---------- spaces and pads ----------
 const isInternal = bank => bank === "A" || bank === "B";
-function spaceOf(bank) { return state.work ? new SM.Space(state.work, isInternal(bank) ? "backup" : "card") : null; }
+// The space a bank shows: C/D on the card, or A/B in the backup area chosen (1-7).
+function spaceOf(bank) { return state.work ? new SM.Space(state.work, isInternal(bank) ? "backup" : "card", state.area || 1) : null; }
 function indexOf(bank, n) { return ("AC".includes(bank) ? 0 : 8) + n; }
 
 // Sample names: the SP-202 keeps none, so the page remembers them by the sample's content
@@ -119,9 +122,14 @@ function rememberName(data, fileName) {
   try { localStorage.setItem(NAMES_KEY, JSON.stringify(padNames)); } catch (e) {}
 }
 const nameOf = (sp, e) => padNames[sampleKey(sp.sample(e))] || "";
+// The audio files put on pads in this session, by the same key: LOAD TO PAD redoes a pad from its
+// file (any quality, mono or stereo). {data, chans, rate, fileName, from, to, gain}
+const originals = {};
 
+const mb = b => (b / 1048576).toFixed(1);
+// A size as the user reads it: KB under 1 MB, else MB.
+const size = b => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024)).toLocaleString()} KB`;
 function fmtSeconds(s) { return s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : `${s.toFixed(2)} s`; }
-function hex(n, w = 6) { return "0x" + n.toString(16).toUpperCase().padStart(w, "0"); }
 
 function renderPads() {
   const sp = spaceOf(state.bank);
@@ -134,18 +142,18 @@ function renderPads() {
     if (pend) {
       empty = false;
       const sec = (pend.end - pend.start) / pend.rate;
-      info = `<span class="sname"></span><span class="grade">WAV → ${SM.SHORT[pend.grade]}</span><br>${fmtSeconds(sec)} · PENDING`;
+      info = `<span class="sname"></span><span class="grade">WAV → ${SM.SHORT[pend.grade]}</span><br>${fmtSeconds(sec)} · WAITING`;
       names[n] = pend.fileName.replace(/\.[^.]+$/, "");
     } else if (present) {
       const e = sp.entry(indexOf(state.bank, n));
       if (!e.empty) {
         empty = false;
         names[n] = nameOf(sp, e);
-        info = `<span class="sname"></span><span class="grade">${SM.SHORT[e.grade]}</span>${e.stereo ? ' <span class="st">ST</span>' : ""} · ${e.gate ? "GATE" : "TRIG"} · ${e.oneShot ? "1SHOT" : "LOOP"}${e.effect ? ` · <span class="fx">${({ "RING MOD": "RING", "FILTER 1": "FLT1", "FILTER 2": "FLT2" })[e.effect] || "FX"}</span>` : ""}<br>${fmtSeconds(e.seconds)} · ${e.bpm} BPM${e.marked ? " · MARK" : ""}`;
+        info = `<span class="sname"></span><span class="grade">${SM.SHORT[e.grade]}</span> · <span class="st">${e.stereo ? "STEREO" : "MONO"}</span><br>${fmtSeconds(e.seconds)}${e.oneShot ? "" : ` · ♩ ${e.bpm}`}`;
       } else info = "EMPTY";
     } else info = state.work ? (isInternal(state.bank) ? "NO BACKUP" : "NOT FORMATTED") : "—";
     html.push(`<div class="pad${empty ? " empty" : ""}${pend ? " pending" : ""}${n === state.selected ? " selected" : ""}" data-n="${n}" draggable="${!empty && !pend}">
-      <div class="pad-top"><span class="pad-name">${name}</span><span class="led${empty ? "" : " on"}"></span></div>
+      <div class="pad-top"><span class="pad-name">${name}</span><span class="led${empty ? "" : !pend && onCard(state.bank, n) ? " on" : " amber"}" title="${empty ? "" : !pend && onCard(state.bank, n) ? "On the card" : "Not on the card yet: WRITE CARD"}"></span></div>
       <div class="pad-info">${info}</div></div>`);
   }
   $("pads").innerHTML = html.join("");
@@ -153,6 +161,10 @@ function renderPads() {
     const t = names[+el.closest(".pad").dataset.n];
     if (t) { el.textContent = t; el.title = t; } else el.remove();
   });
+  fitPads();
+  const areas = state.work ? SM.backupAreas(state.work) : [];
+  $("area-row").innerHTML = areas.length > 1 ? `<span class="silk">BACKUP</span>` + areas.map(k =>
+    `<button type="button" data-area="${k}" class="${k === (state.area || 1) ? "on" : ""}" title="Backup ${k}: saved on the SP-202 with pad ${k}">${k}</button>`).join("") : "";
   document.querySelectorAll(".bank").forEach(b => {
     b.classList.toggle("active", b.dataset.bank === state.bank);
     const s = spaceOf(b.dataset.bank);
@@ -162,8 +174,49 @@ function renderPads() {
   if (present) {
     const total = sp.dataEnd - sp.dataStart, free = sp.freeBytes();
     $("mem-bar").style.width = `${(100 * (total - free) / total).toFixed(1)}%`;
-    $("mem-text").textContent = `${fmtSeconds(free * 2 / SM.RATES[0])} free HI-FI`;
-  } else { $("mem-bar").style.width = "0"; $("mem-text").textContent = ""; }
+    $("mem-text").textContent = `${mb(total - free)} of ${mb(total)} MB used`;
+    $("mem-info").innerHTML = memoryTable(free, total, isInternal(state.bank));
+  } else { $("mem-bar").style.width = "0"; $("mem-text").textContent = ""; $("mem-info").innerHTML = ""; }
+}
+
+// The recording time left per quality, for the space the samples really have. A mono sample
+// takes half a byte per sample (two per byte), stereo twice that. Then the BACKUPs on the card:
+// the page keeps one area for them (more are counted if the SP-202 has saved more).
+const fmtMS = s => { const t = Math.floor(s); return `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, "0")}s`; };
+function memoryTable(free, total, internal) {
+  const rows = SM.GRADES.map((g, i) =>
+    `<tr><td>${g}</td><td>${fmtMS(free * 2 / SM.RATES[i])}</td><td>${fmtMS(free / SM.RATES[i])}</td></tr>`).join("");
+  const areas = state.work ? SM.backupAreas(state.work).length : 0;
+  return `<table><thead><tr><th>QUALITY</th><th>FREE MONO</th><th>FREE STEREO</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="mem-backup"><b>BACKUP</b> ${areas} of ${Math.max(1, areas)} · banks A and B, 0.5 MB each</p>
+    ${internal ? "" : `<p>Each BACKUP of banks A and B takes 0.5 MB from the end of the card (32 s of HI-FI mono). This page keeps one backup free, so ${mb(total)} MB is left for banks C and D.</p>`}`;
+}
+
+// Whether a pad is on the card as it is here: same settings and sound as the card last read or
+// written. The pad LED is green when it is, orange until WRITE CARD.
+const sameBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+function onCard(bank, n) {
+  if (!state.base) return false;
+  const w = spaceOf(bank), b = new SM.Space(state.base, isInternal(bank) ? "backup" : "card", state.area || 1);
+  if (!w || !w.present() || !b.present()) return false;
+  const i = indexOf(bank, n), ew = w.entry(i), eb = b.entry(i);
+  return !ew.empty && !eb.empty && sameBytes(ew.raw, eb.raw) && sameBytes(w.sample(ew), b.sample(eb));
+}
+
+// The sample editor's screen as tall as the two rows of pads beside it, down to the lip under
+// them (a 3px shadow).
+function fitLcd() {
+  const lcd = document.querySelector("#editor .lcd"), cv = lcd.querySelector("canvas");
+  const h = Math.max(120, $("pads").offsetHeight + 3 - (lcd.offsetHeight - cv.offsetHeight));
+  if (cv.style.height !== `${h}px`) cv.style.height = `${h}px`;
+}
+
+// Pad text stays 12px; only a pad whose line runs past its edge (a wide font) gets it smaller.
+function fitPads() {
+  $("pads").querySelectorAll(".pad-info").forEach(el => {
+    el.style.fontSize = "";
+    for (let f = 11.5; f >= 8 && el.scrollWidth > el.clientWidth; f -= .5) el.style.fontSize = `${f}px`;
+  });
 }
 
 function selectedEntry() {
@@ -175,75 +228,73 @@ function selectedEntry() {
 const EFFECTS = [[0x00, "NONE"], [0x04, "RING MOD"], [0x08, "FILTER 2"], [0x10, "FILTER 1"]];
 const DEFAULT_SETTINGS = { gate: false, oneShot: false, effect: 0, level: 127, stereo: false };
 
-// The pad settings the SP-202 keeps on the card, as controls (entry) or for a waiting
-// audio file (pending, used when it is written).
-function settingsHtml(v, opts) {
-  const seg = (key, a, b, on) =>
-    `<div class="seg"><button type="button" data-set="${key}" data-v="0" class="${on ? "" : "on"}">${a}</button>` +
-    `<button type="button" data-set="${key}" data-v="1" class="${on ? "on" : ""}">${b}</button></div>`;
+// The pad settings the SP-202 keeps on the card (PLAY, MODE, EFFECT in the sample editor, BPM
+// in INFO), as controls; they change the pad at once. v: {gate, oneShot, effect, level, stereo}.
+// off: no pad to set, the controls are shown greyed out.
+let fxOpen = false;                             // the EFFECT sub-panel stays as the user left it
+const seg = (key, a, b, on, offA, offB) =>
+  `<div class="seg"><button type="button" data-set="${key}" data-v="0" class="${on ? "" : "on"}"${offA ? " disabled" : ""}>${a}</button>` +
+  `<button type="button" data-set="${key}" data-v="1" class="${on ? "on" : ""}"${offB ? " disabled" : ""}>${b}</button></div>`;
+function settingsHtml(v, off) {
   const fx = EFFECTS.map(([k, n]) => `<option value="${k}"${k === v.effect ? " selected" : ""}>${n}</option>`).join("");
+  const fxName = v.stereo || off ? "" : (EFFECTS.find(x => x[0] === v.effect) || [0, "NONE"])[1];
   return `<div class="settings">
-    <div class="set-row"><span class="silk">PLAY</span>${seg("gate", "TRIGGER", "GATE", v.gate)}</div>
-    <div class="set-row"><span class="silk">MODE</span>${seg("oneShot", "LOOP", "ONE SHOT", v.oneShot)}</div>
-    <div class="set-row"><span class="silk">EFFECT</span><select data-set="effect"${v.stereo ? " disabled" : ""}>${fx}</select>
-      ${v.stereo ? '<span class="set-note">no effect on stereo pads</span>' : ""}</div>
-    <div class="set-row"><span class="silk">FX LEVEL</span><input type="range" min="0" max="127" value="${v.level}" data-set="level"
-      ${v.stereo || !v.effect ? "disabled" : ""}><b class="lvl">${v.level}</b></div>
-    <div class="set-row"><span class="silk">QUALITY</span><span>${opts.quality}</span></div>
-    <div class="set-row"><span class="silk">CHANNELS</span><span>${opts.channels}</span></div>
+    <div class="set-row"><span class="silk lbl">PLAY</span>${seg("gate", "TRIGGER", "GATE", v.gate, off, off)}</div>
+    <div class="set-row"><span class="silk lbl">MODE</span>${seg("oneShot", "LOOP", "ONE SHOT", v.oneShot, off, off)}</div>
+    <details class="fx-box"${fxOpen ? " open" : ""} ontoggle="fxOpen = this.open"><summary>EFFECT${fxName && fxName !== "NONE" ? `<span>${fxName} · ${v.level}</span>` : ""}</summary>
+    <div class="set-row"><span class="silk lbl">EFFECT</span><select data-set="effect"${v.stereo || off ? " disabled" : ""}>${fx}</select>
+      ${v.stereo && !off ? '<span class="set-note">no effect on stereo pads</span>' : ""}</div>
+    <div class="set-row"><span class="silk lbl">FX LEVEL</span><input type="range" min="0" max="127" value="${v.level}" data-set="level"
+      ${v.stereo || !v.effect || off ? "disabled" : ""}><b class="lvl">${v.level}</b></div>
+    </details>
   </div>`;
+}
+const chanHtml = (stereo, offMono, offStereo) =>
+  `<div class="set-row"><span class="silk lbl">CHANNELS</span>${seg("stereo", "MONO", "STEREO", stereo, offMono, offStereo)}</div>`;
+// BPM in INFO: what the SP-202 shows for the pad (set from the marks), or none for a one shot.
+function bpmHtml(oneShot, bpm) {
+  return `<div>BPM : ${oneShot ? "— (one shot)" : bpm}</div>`;
 }
 
 function renderDetail() {
-  const s = selectedEntry(), body = $("detail-body");
+  const s = selectedEntry(), body = $("detail-body"), chan = $("detail-chan"), info = $("pad-info");
   const name = state.bank + (state.selected + 1);
-  $("detail-title").textContent = `PAD ${name}`;
-  let bpm = "---";
+  const head = what => `<div><b>PAD ${name}</b> · <span class="iname"></span></div>${what}`;
+  let sound = "";
   const pend = state.pending[name];
-  if (pend) {
+  if (pend) {                                    // a file waiting for the card to be read
     const set = pend.settings;
     const sec = (pend.end - pend.start) / pend.rate;
-    const bytes = Math.ceil(sec * SM.RATES[pend.grade] / 2) * (set.stereo ? 2 : 1);
-    const gradeSel = `<select data-set="grade">${SM.GRADES.map((g, i) => `<option value="${i}"${i === pend.grade ? " selected" : ""}>${g}</option>`).join("")}</select>`;
-    const chanSel = pend.chans.length > 1
-      ? `<div class="seg"><button type="button" data-set="stereo" data-v="0" class="${set.stereo ? "" : "on"}">MONO</button><button type="button" data-set="stereo" data-v="1" class="${set.stereo ? "on" : ""}">STEREO</button></div>`
-      : "MONO (the file is mono)";
-    body.innerHTML = `<table>
-      <tr><td>PAD</td><td>${name} · audio file waiting</td></tr>
-      <tr><td>FILE</td><td class="fname"></td></tr>
-      <tr><td>LENGTH</td><td>${fmtSeconds(sec)} · about ${bytes.toLocaleString()} bytes on the card</td></tr>
-      <tr><td>BPM</td><td>${sp202Bpm(bytes, pend.grade, set.stereo)}</td></tr>
-    </table>` + settingsHtml({ ...set }, { quality: gradeSel, channels: chanSel }) +
-      `<p class="hint">LOAD TO PAD (in the sound editor) or WRITE CARD encodes it for the SP-202 with these settings.</p>`;
-    body.querySelector(".fname").textContent = pend.fileName;
-  } else if (!s) {
-    body.innerHTML = `<p class="hint">${state.work ? "This bank is not on the image." : "Connect the card and READ it, or open a sample set or a card backup."}</p>`;
-  } else if (s.e.empty) {
-    body.innerHTML = `<table><tr><td>PAD</td><td>${name} · empty</td></tr></table><p class="hint">Drop an audio file or a pad file here, or drag another pad onto it.</p>`;
+    sound = pend.fileName;
+    info.innerHTML = head(`<div>${fmtSeconds(sec)} · not on the pad yet</div>`) + bpmHtml(set.oneShot, bpmOf(guessBeats(sec), sec));
+    chan.innerHTML = chanHtml(set.stereo, false, pend.chans.length < 2);
+    body.innerHTML = settingsHtml(set) +
+      `<p class="hint">${spaceOf(state.bank)?.present() ? "LOAD TO PAD puts it on the pad." : "READ CARD (or open a card image), then LOAD TO PAD puts it on the pad."}</p>`;
+  } else if (!s || s.e.empty) {
+    sound = !s ? "" : "empty";
+    info.innerHTML = head(`<div class="hint">${!s ? (state.work ? "This bank is not on the image." : "Connect the card and READ it, or open a sample set or a card image.")
+      : "Drop an audio file or a .sp202pad on it, or drag another pad onto it."}</div>`);
+    chan.innerHTML = chanHtml(false, true, true);
+    body.innerHTML = settingsHtml(DEFAULT_SETTINGS, true);
   } else {
-    const e = s.e;
-    bpm = String(e.bpm);
-    body.innerHTML = `<table>
-      <tr><td>PAD</td><td>${name}${isInternal(state.bank) ? " (internal, via BACKUP)" : ""}</td></tr>
-      <tr><td>NAME</td><td class="sample-name"></td></tr>
-      <tr><td>LENGTH</td><td>${fmtSeconds(e.seconds)} · ${e.length.toLocaleString()} bytes</td></tr>
-      <tr><td>BPM</td><td>${e.bpm} (recorded at ${e.bpmRec})</td></tr>
-      <tr><td>START / END</td><td>${e.marked ? `${e.playStart.toLocaleString()} → ${e.playEnd.toLocaleString()}` : "whole sample"}</td></tr>
-    </table>` + settingsHtml({ gate: e.gate, oneShot: e.oneShot, effect: e.raw[1], level: e.raw[8], stereo: e.stereo },
-      { quality: `${SM.GRADES[e.grade]} · ${e.rate} Hz <span class="set-note">set when recorded</span>`,
-        channels: `${e.stereo ? "STEREO" : "MONO"} <span class="set-note">set when recorded</span>` }) +
-      `<details class="raw-box"><summary>Entry bytes</summary><div class="raw">${[...e.raw].map(b => b.toString(16).padStart(2, "0")).join(" ")}</div>
-       <div class="set-note">address ${hex(e.start)} · byte 7 = ${e.raw[7].toString(16)} (not decoded yet)</div></details>`;
-    body.querySelector(".sample-name").textContent = nameOf(s.sp, e) || "— (recorded on the SP-202)";
+    const e = s.e, src = editor?.src?.kind === "marks" && editor.src.pad.bank === state.bank && editor.src.pad.index === e.index ? editor.src : null;
+    const want = src ? src.wantStereo : e.stereo, canStereo = e.stereo || !!src?.original && src.original.chans.length > 1;
+    sound = nameOf(s.sp, e) || "recorded on the SP-202";
+    info.innerHTML = head(`<div>${[SM.GRADES[e.grade], e.stereo ? "STEREO" : "MONO", fmtSeconds(e.seconds), `${Math.round(e.length / 1024).toLocaleString()} KB`,
+      isInternal(state.bank) ? "internal, via BACKUP" : ""].filter(Boolean).join(" · ")}</div>
+      <div>${e.gate ? "GATE" : "TRIGGER"} · ${e.oneShot ? "ONE SHOT" : "LOOP"}</div>`)
+      + bpmHtml(e.oneShot, e.bpm);
+    chan.innerHTML = chanHtml(want, false, !canStereo);
+    body.innerHTML = settingsHtml({ gate: e.gate, oneShot: e.oneShot, effect: e.raw[1], level: e.raw[8], stereo: e.stereo });
   }
+  const iname = info.querySelector(".iname");
+  if (sound) iname.textContent = sound; else iname.previousSibling.remove(), iname.remove();
   const has = !!(s && !s.e.empty) && !pend;
   $("btn-export").disabled = !has;
-  $("btn-wav").disabled = !has;
   $("btn-clear").disabled = !has && !pend;
   $("btn-import").disabled = !s;
   if (!state.busy) {
-    if (pend) display(SM.SHORT[pend.grade] === "HI-FI" ? "HiF" : SM.SHORT[pend.grade] === "STD" ? "Std" : "L-F", `${name} · AUDIO FILE`);
-    else display(s ? (has ? bpm : "---") : (state.link ? "Con" : "---"), s ? `${name} · ${has ? "BPM" : "EMPTY"}` : (state.link ? "CONNECTED" : "READY"));
+    display(state.link ? "202" : "---");        // the SP-202 screen: 202 while the card is connected
   }
 }
 
@@ -252,15 +303,18 @@ function renderDetail() {
 function applySetting(key, value) {
   const name = state.bank + (state.selected + 1), pend = state.pending[name];
   if (pend) {
-    if (key === "grade") { pend.grade = value; delete pend.cache; editor && syncEditor(true); }
-    else pend.settings[key] = key === "effect" || key === "level" ? value : !!value;
+    pend.settings[key] = key === "effect" || key === "level" ? value : !!value;
     if (pend.settings.stereo) pend.settings.effect = 0;
     log(`${name}: ${key} ${value} (waiting audio file)`);
     render();
     return;
   }
   const s = selectedEntry();
-  if (!s || s.e.empty) return;
+  if (!s || s.e.empty || !(value >= 0)) return;
+  if (key === "stereo") {                       // the sound itself: changes on LOAD TO PAD
+    if (editor?.src?.kind === "marks") { editor.src.wantStereo = !!value; editor.renderFields(); renderDetail(); }
+    return;
+  }
   const r = Uint8Array.from(s.e.raw);
   if (key === "gate") r[4] = value ? r[4] | 0x08 : r[4] & ~0x08;
   else if (key === "oneShot") r[4] = value ? r[4] | 0x04 : r[4] & ~0x04;
@@ -288,7 +342,6 @@ function renderButtons() {
   $("write-count").textContent = state.base ? (dirty ? `${dirty} BLOCK${dirty > 1 ? "S" : ""}` : "") : (state.work ? "IMAGE" : "");
   $("btn-write").classList.toggle("lit", writable);
   $("btn-save").disabled = !state.work;
-  $("btn-revert").disabled = !state.base || !dirty || state.busy;
   $("btn-erase-all").disabled = !linked || powered || state.busy || !info.canWrite;
   $("btn-status").disabled = !linked;
   $("btn-set-card").disabled = !linked || powered || state.busy || !(state.work || Object.keys(state.pending).length);
@@ -304,18 +357,19 @@ function renderButtons() {
   else cs.textContent = dirty ? `Connected · ${dirty} block${dirty > 1 ? "s" : ""} changed: press WRITE CARD.` : "Connected · the card holds what you see.";
 }
 
-function render() { renderPads(); renderDetail(); renderButtons(); syncEditor(); renderProject(); renderBackup(); renderFirmware(); }
+function render() { renderPads(); syncEditor(); renderDetail(); renderButtons(); renderProject(); renderBackup(); renderFirmware(); }
 
 // ---------- the BACKUP section ----------
 const BK_FIRST = SM.BACKUP_BLOCK, BK_BYTES = (SM.BLOCKS - SM.BACKUP_BLOCK) * SM.BLOCK_BYTES;
 function renderBackup() {
-  const el = $("backup-status"), bk = state.work ? new SM.Space(state.work, "backup") : null;
-  if (!bk) el.innerHTML = "READ CARD (or open a sample set or a card backup) to see the backup bank.";
-  else if (!bk.present()) el.innerHTML = '<span class="bad">No backup on this card.</span> Do step 1 on the SP-202, then READ CARD.';
+  const el = $("backup-status"), bk = state.work ? new SM.Space(state.work, "backup", state.area || 1) : null;
+  if (!bk) el.innerHTML = "READ CARD (or open a sample set or a card image) to see the card backup.";
+  else if (!bk.present()) el.innerHTML = "";
   else {
     const used = bk.used();
-    el.innerHTML = `<b>Backup present</b> · ${used.length} pad${used.length === 1 ? "" : "s"} (${used.map(e => e.name).join(", ") || "none"})
-      · ${fmtSeconds(bk.freeBytes() * 2 / SM.RATES[0])} free in HI-FI`;
+    el.innerHTML = `<b>Backup ${state.area || 1} on the card</b> · ${used.length} pad${used.length === 1 ? "" : "s"} (${used.map(e => e.name).join(", ") || "none"})
+      · ${fmtSeconds(bk.freeBytes() / SM.RATES[0])} free in HI-FI STEREO
+      · ${mb(bk.dataEnd - bk.dataStart - bk.freeBytes())} of ${mb(bk.dataEnd - bk.dataStart)} MB used`;
   }
   $("btn-bk-export").disabled = !(bk && bk.present());
   $("btn-bk-import").disabled = !state.work;
@@ -323,15 +377,16 @@ function renderBackup() {
 
 function exportBackup() {
   state.work.finalize();
-  download(state.work.img.slice(BK_FIRST * SM.BLOCK_BYTES), `${projName()}-backup.sp202bak`);
+  const at = SM.areaBlock(state.area || 1) * SM.BLOCK_BYTES;
+  download(state.work.img.slice(at, at + BK_BYTES), `${projName()}-backup${state.area > 1 ? state.area : ""}.sp202bak`);
 }
 
 function importBackup(bytes, name) {
-  if (bytes.length !== BK_BYTES) { note(`${name}: not an SP-202 backup (${BK_BYTES.toLocaleString()} bytes expected).`, "err"); return; }
+  if (bytes.length !== BK_BYTES) { note(`${name}: not an SP-202 backup (${size(BK_BYTES)} expected).`, "err"); return; }
   const probe = new SM.Image();
   probe.img.set(bytes, BK_FIRST * SM.BLOCK_BYTES);
   if (!new SM.Space(probe, "backup").present()) { note(`${name}: no SP-202 backup inside.`, "err"); return; }
-  state.work.img.set(bytes, BK_FIRST * SM.BLOCK_BYTES);
+  state.work.img.set(bytes, SM.areaBlock(state.area || 1) * SM.BLOCK_BYTES);
   state.editorKey = null;
   edited(`backup replaced by ${name}`);
   imageChecks();
@@ -342,14 +397,21 @@ function importBackup(bytes, name) {
 const be32put = (a, o, v) => { a[o] = v >>> 24; a[o + 1] = (v >>> 16) & 255; a[o + 2] = (v >>> 8) & 255; a[o + 3] = v & 255; };
 const MARK_ALIGN = 16;     // the SP-202's own marks are multiples of 16 bytes (32 samples mono)
 
-// The BPM the SP-202 shows for a pad: the part between the marks taken as 8, 4, 2 or 1
-// beats, the most beats that stay at or under 200 BPM (fits all 16 pads seen).
-function sp202Bpm(bytes, grade, stereo) {
-  const sec = bytes * 2 / (stereo ? 2 : 1) / SM.RATES[grade];
-  let bpm = 0;
-  for (const beats of [8, 4, 2, 1]) { bpm = 60 * beats / sec; if (bpm <= 200) break; }
-  return Math.max(1, Math.min(255, Math.round(bpm)));
+// The BPM the SP-202 shows for a pad: beats ÷ the length between the marks. The page guesses
+// the beats (1 to 64, a power of two) that put the tempo between 70 and 140; moving a mark keeps
+// the tempo.
+const padSeconds = (bytes, grade, stereo) => bytes * 2 / (stereo ? 2 : 1) / SM.RATES[grade];
+function guessBeats(sec) {
+  for (let beats = 1; beats < 64; beats *= 2) if (60 * beats / sec >= 70) return beats;
+  return 64;
 }
+const bpmOf = (beats, sec) => Math.max(1, Math.min(255, Math.round(60 * beats / sec)));
+const beatsOf = (bpm, sec) => Math.max(1, Math.round(bpm * sec / 60));
+function sp202Bpm(bytes, grade, stereo, beats) {
+  const sec = padSeconds(bytes, grade, stereo);
+  return bpmOf(beats ?? guessBeats(sec), sec);
+}
+const markedSeconds = e => padSeconds((e.playEnd || e.length) - e.playStart, e.grade, e.stereo);
 
 function syncEditor(force) {
   if (!editor) return;
@@ -361,18 +423,19 @@ function syncEditor(force) {
   if (!force && key === state.editorKey) return;
   state.editorKey = key;
   if (pend) editor.load(pend);
-  else if (e) editor.load({
-    kind: "marks", title: `${name} · ${SM.GRADES[e.grade]} ${e.stereo ? "ST" : "MONO"} · ${isInternal(state.bank) ? "INTERNAL" : "CARD"}`,
-    total: e.length, start: e.playStart, end: e.playEnd || e.length, grade: e.grade, stereo: e.stereo,
-    align: MARK_ALIGN, editable: true, pad: { bank: state.bank, index: e.index },
-    ...(() => {
-      const p = padSound(s.sp, e);
-      const mix = p.r ? p.l.map((v, i) => (v + p.r[i]) / 2) : p.l;
-      return { data: mix, lr: p.r ? [p.l, p.r] : null, spb: p.spb };
-    })(), rate: e.rate, fileName: name,
-    info: "MARKS · THEN WRITE CARD",
-  });
-  else editor.load({ kind: "none", title: `${name} · EMPTY`, info: s ? "DROP AN AUDIO FILE ON THIS PAD" : "NO PAD TABLE: READ THE CARD OR OPEN AN IMAGE" });
+  else if (e) {
+    const original = originals[sampleKey(s.sp.sample(e))];       // the file it came from, if this page has it
+    const p = padSound(s.sp, e);
+    editor.load({
+      kind: "marks", title: [name, nameOf(s.sp, e), `${SM.GRADES[e.grade]} ${e.stereo ? "STEREO" : "MONO"}`, isInternal(state.bank) ? "INTERNAL" : "CARD"].filter(Boolean).join(" · "),
+      total: e.length, start: e.playStart, end: e.playEnd || e.length, grade: e.grade, origGrade: e.grade, stereo: e.stereo,
+      original, minGrade: original ? 0 : e.grade, wantStereo: e.stereo,
+      align: MARK_ALIGN, editable: true, pad: { bank: state.bank, index: e.index },
+      data: p.r ? p.l.map((v, i) => (v + p.r[i]) / 2) : p.l, lr: p.r ? [p.l, p.r] : null, spb: p.spb,
+      rate: e.rate, fileName: [name, nameOf(s.sp, e)].filter(Boolean).join(" "),
+      info: original ? "ORIGINAL FILE KEPT" : `${Math.max(1, Math.round(e.length / 1024)).toLocaleString()} KB`,
+    });
+  } else editor.load({ kind: "none", title: `${name} · EMPTY`, info: s ? "DROP AN AUDIO FILE ON THIS PAD" : "NO PAD TABLE: READ THE CARD OR OPEN AN IMAGE" });
 }
 
 function onEditorChange(src) {
@@ -381,7 +444,9 @@ function onEditorChange(src) {
     const r = Uint8Array.from(e.raw);
     be32put(r, 18, src.start);
     be32put(r, 22, src.end);
-    r[2] = sp202Bpm(src.end - src.start, e.grade, e.stereo);
+    const sec = padSeconds(src.end - src.start, e.grade, e.stereo);       // the same tempo: whole beats in the new length
+    r[2] = bpmOf(beatsOf(e.bpm, sec), sec);
+    if (r[2] < 40 || r[2] > 250) r[2] = bpmOf(guessBeats(sec), sec);
     sp.writeEntry(src.pad.index, r);
     state.work.finalize();
     state.editorKey = `e:${e.name}:${e.start}:${e.length}:${state.source}`;
@@ -431,7 +496,14 @@ async function loadAudio(bytes, fileName, bank, n) {
     state.bank = bank;
     state.selected = n;
     log(`${fileName} on ${name}: ${(a.data.length / a.rate).toFixed(2)} s at ${a.rate} Hz`, "info");
-    note(`${fileName} is on ${name}, waiting. Trim it below, then LOAD TO PAD or WRITE CARD.`, "ok");
+    const sp = spaceOf(bank), pend = state.pending[name];
+    if (sp && sp.present()) {                    // straight onto the pad, at the best quality that fits
+      const old = sp.entry(indexOf(bank, n)), free = sp.freeBytes() + (old.empty ? 0 : old.length);
+      const need = g => (Math.ceil(a.data.length / a.rate * SM.RATES[g] / 2) + 16) * (pend.settings.stereo && a.chans.length > 1 ? 2 : 1);
+      while (pend.grade < 3 && need(pend.grade) > free) pend.grade++;
+      if (await commitPending(name))
+        note(`${fileName} is on ${name} (${SM.GRADES[pend.grade]}). Set the marks, QUALITY or CHANNELS and LOAD TO PAD to redo it; WRITE CARD to keep it.`, "ok");
+    } else note(`${fileName} is waiting for ${name}: READ CARD (or open a card image), then LOAD TO PAD.`, "ok");
     render();
   } catch (e) {
     note(`${fileName}: the browser cannot read this audio file (${e.message || e}).`, "err");
@@ -455,15 +527,9 @@ async function commitPending(name) {
   if (!pend) return false;
   const bank = name[0], n = +name.slice(1) - 1, sp = spaceOf(bank);
   if (!sp || !sp.present()) { note(`Bank ${bank} is not on the image: READ CARD first.`, "err"); return false; }
-  const rate = SM.RATES[pend.grade], set = pend.settings;
-  const stereo = !!set.stereo && pend.chans.length > 1;
-  const cut = d => d.subarray(Math.floor(pend.start), Math.floor(pend.end));
-  const parts = [];
-  for (const d of stereo ? pend.chans.slice(0, 2) : [pend.data]) parts.push(Float32Array.from(await Audio202.resample(cut(d), pend.rate, rate)));
-  let peak = 0;
-  for (const p of parts) for (const v of p) peak = Math.max(peak, Math.abs(v));
-  const gain = peak > 0 ? NORMAL_PEAK / peak : 1;               // the same for both channels
-  for (const p of parts) for (let i = 0; i < p.length; i++) p[i] *= gain;
+  const set = pend.settings;
+  const { parts, gain } = await soundParts(pend);               // brought to NORMAL_PEAK, both channels alike
+  const stereo = parts.length > 1;
   const t0 = performance.now();
   const { bytes, clipped } = stereo ? Codec202.encodeStereo(parts[0], parts[1]) : Codec202.encode(parts[0]);
   const data = bytes.length % 16 ? Uint8Array.from([...bytes, ...new Uint8Array(16 - bytes.length % 16)]) : bytes;
@@ -476,10 +542,71 @@ async function commitPending(name) {
   delete state.pending[name];
   state.editorKey = null;
   rememberName(data, pend.fileName);
-  log(`${name}: ${pend.fileName} encoded (${SM.GRADES[pend.grade]}${stereo ? " STEREO" : ""}, ${data.length.toLocaleString()} bytes, level ${(20 * Math.log10(gain)).toFixed(1)} dB, ${(performance.now() - t0).toFixed(0)} ms)`
+  originals[sampleKey(data)] = { data: pend.data, chans: pend.chans, rate: pend.rate, fileName: pend.fileName,
+                                 from: Math.floor(pend.start), to: Math.floor(pend.end), gain };
+  log(`${name}: ${pend.fileName} encoded (${SM.GRADES[pend.grade]}${stereo ? " STEREO" : ""}, ${size(data.length)}, level ${(20 * Math.log10(gain)).toFixed(1)} dB, ${(performance.now() - t0).toFixed(0)} ms)`
       + (clipped ? `, ${clipped} samples clipped: the file is louder than the SP-202's full scale` : ""), clipped ? "warn" : "info");
   if (pend.grade) log(`${name}: ${SM.GRADES[pend.grade]} is encoded like HI-FI at its own rate; only HI-FI was checked on the SP-202`, "warn");
   edited(`${name} ready to write`);
+  return true;
+}
+
+// LOAD TO PAD on a card pad: START–STOP put back on the pad at the chosen quality and channels,
+// with its settings and the same beats. It is redone from its original file when this page has
+// it (any quality, mono or stereo), else from the pad itself (down only, or stereo to mono). The
+// part outside the marks is gone and its memory freed; the pad then plays whole.
+async function resamplePad(src) {
+  const sp = spaceOf(src.pad.bank), e = sp.entry(src.pad.index);
+  const cut = src.start > 0 || src.end < e.length;
+  if (e.empty || src.grade < src.minGrade) return false;
+  const t0 = performance.now();
+  const { parts, region } = await soundParts(src);
+  const stereo = parts.length > 1;
+  if (src.grade === e.grade && stereo === e.stereo && !cut) return false;
+  const { bytes, clipped } = stereo ? Codec202.encodeStereo(parts[0], parts[1]) : Codec202.encode(parts[0]);
+  const data = bytes.length % 16 ? Uint8Array.from([...bytes, ...new Uint8Array(16 - bytes.length % 16)]) : bytes;
+  const r = Uint8Array.from(e.raw);
+  r[4] = (r[4] & 0x1F) | (src.grade << 6) | (stereo ? 0x20 : 0);
+  if (stereo) r[1] = 0;                                           // no effect on stereo pads
+  r[2] = sp202Bpm(data.length, src.grade, stereo, beatsOf(e.bpm, markedSeconds(e)));
+  be32put(r, 18, 0);
+  be32put(r, 22, data.length);
+  const title = nameOf(sp, e);
+  try { sp.put(e.index, r, data); }
+  catch (err) { note(`${e.name}: ${err.message}`, "err"); log(`${e.name}: ${err.message}`, "err"); return false; }
+  if (title) rememberName(data, `${title}.x`);
+  if (src.original) originals[sampleKey(data)] = { ...src.original, from: region[0], to: region[1] };
+  state.editorKey = null;
+  const what = [cut ? "cut to its start and stop points" : "", src.grade !== e.grade ? `${SM.GRADES[e.grade]} → ${SM.GRADES[src.grade]}` : "",
+                stereo !== e.stereo ? (stereo ? "MONO → STEREO" : "STEREO → MONO") : "", src.original ? "from its file" : ""].filter(Boolean).join(", ");
+  log(`${e.name}: ${what}, ${size(e.length)} → ${size(data.length)} (${(performance.now() - t0).toFixed(0)} ms)`
+      + (clipped ? `, ${clipped} samples clipped` : ""), clipped ? "warn" : "info");
+  edited(`${e.name} reloaded (${what}): WRITE CARD to keep it`);
+  note(`${e.name} is done: ${what}. WRITE CARD to put it on the card.`, "ok");
+  return true;
+}
+
+// TRUNCATE, as on the SP-202: the pad cut to its start and stop points byte for byte (the marks
+// fall on 16-byte frame boundaries), the rest deleted and its memory freed. No re-encoding; the
+// settings and the BPM stay, the pad then plays whole.
+function truncatePad(src) {
+  const sp = spaceOf(src.pad.bank), e = sp.entry(src.pad.index);
+  if (e.empty || (src.start === 0 && src.end === e.length)) return false;
+  const data = Uint8Array.from(sp.sample(e).subarray(src.start, src.end));
+  const r = Uint8Array.from(e.raw);
+  be32put(r, 18, 0);
+  be32put(r, 22, data.length);
+  const title = nameOf(sp, e);
+  try { sp.put(e.index, r, data); }
+  catch (err) { note(`${e.name}: ${err.message}`, "err"); log(`${e.name}: ${err.message}`, "err"); return false; }
+  if (title) rememberName(data, `${title}.x`);
+  if (src.original) {                            // the file it came from, cut alike
+    const o = src.original, k = (o.to - o.from) / e.length;
+    originals[sampleKey(data)] = { ...o, from: o.from + Math.round(src.start * k), to: o.from + Math.round(src.end * k) };
+  }
+  state.editorKey = null;
+  edited(`${e.name} truncated: ${size(e.length)} → ${size(data.length)}, ${size(e.length - data.length)} freed (WRITE CARD to keep it)`);
+  note(`${e.name} truncated: ${size(e.length - data.length)} freed. WRITE CARD to put it on the card.`, "ok");
   return true;
 }
 
@@ -495,7 +622,7 @@ function onInfo(info) {
   check("firmware", info.firmware ? "ok" : "wait", info.banner || "");
   if (info.firmware) {
     check("write", info.canWrite ? "ok" : "fail", info.canWrite ? "D (read) and W (write) available"
-          : "this firmware cannot write: load the latest smartmedia_5v_sp-202 firmware");
+          : "this firmware cannot write: load the latest smartmare-5v-sp-202 firmware");
     if (!info.layoutOk) check("write", "fail", "the firmware overlaps the image area");
   }
   if (info.powered === true) check("power", "warn", `ON (${info.vcc ?? "?"} V): the SP-202 is using the card. Switch it off to READ or WRITE CARD.`);
@@ -506,7 +633,7 @@ function onInfo(info) {
                   h.unerased && `${h.unerased} programs over unerased pages`, h.queued && `${h.queued} reads with nothing queued`,
                   h.late && `${h.late} late data changes`].filter(Boolean);
     check("health", errs.length ? "warn" : "ok", errs.length ? errs.join(", ")
-          : `no errors · ${(h.reads ?? 0).toLocaleString()} bytes read by the SP-202 checked`);
+          : `no errors · ${size(h.reads ?? 0)} read by the SP-202 checked`);
     $("led-health").className = "led " + (errs.length ? "amber" : "on");
   }
   $("led-power").className = "led " + (info.powered ? "amber blink" : "");
@@ -537,12 +664,12 @@ function onClose() {
 const NO_SERIAL = "This browser cannot open USB serial ports. Open this page in Chrome or Edge "
   + "(right-click the file → Open with → Microsoft Edge). Firefox and Safari cannot.";
 
-async function connect() {
-  if (state.link) { await state.link.disconnect(); return; }
+async function connect(port) {
+  if (state.link) { if (!port) await state.link.disconnect(); return; }
   if (!CardLink.supported()) { log(NO_SERIAL, "err"); note(NO_SERIAL, "err"); return; }
   const link = new CardLink({ onLine, onInfo, onClose });
   try {
-    await link.connect();
+    await link.connect(port);
   } catch (e) {
     if (e.name !== "NotFoundError") log(`connection failed: ${e.message}`, "err");
     return;
@@ -551,7 +678,7 @@ async function connect() {
   $("led-usb").className = "led on";
   check("usb", "ok", "USB serial open (Raspberry Pi RP2350)");
   log("card connected", "info");
-  display("Con", "CONNECTED");
+  display("202", "CONNECTED");
   render();
   setTimeout(() => {
     if (state.link === link && !link.info.firmware)
@@ -602,11 +729,12 @@ async function writeCard() {
   state.busy = true;
   renderButtons();
   try {
-    if (!state.base) {
-      log("reading the card first, to send only what changes", "info");
-      display("rd", "READING");
-      state.base = await link.dump(p => display(String(Math.min(99, Math.round(100 * p / 2600))), `READING ${p} PAGES`));
-    }
+    // Always read the card again: the SP-202 may have changed it since the last READ CARD (a
+    // BACKUP SAVE rewrites banks A/B, a recording adds pages). Comparing with an old copy would
+    // skip blocks that look unchanged here but are not on the card (3 Nov 2026: holes in A1-A3).
+    log("reading the card first, to send what differs from what it really holds", "info");
+    display("rd", "READING");
+    state.base = await link.dump(p => display(String(Math.min(99, Math.round(100 * p / 2600))), `READING ${p} PAGES`));
     for (const name of Object.keys(state.pending)) {
       display("Enc", `ENCODING ${name}`);
       await commitPending(name);
@@ -643,7 +771,7 @@ async function writeCard() {
 async function eraseCard() {
   const ok = ask("Erase the whole card?", `<p>Everything on the card is erased: the pads of banks C/D, the BACKUP of banks A/B
      and every sample set. It cannot be undone.</p>
-     <p>To keep something, SAVE CARD BACKUP or copy the sample sets from the SMARTMARE drive first.</p>
+     <p>To keep something, SAVE BACKUP (CARD IMAGE) or copy the sample sets from the SMARTMARE drive first.</p>
      <p>Type <b>ERASE</b> to confirm:</p><input id="erase-confirm" autocomplete="off" spellcheck="false">`, "ERASE");
   const input = $("erase-confirm"), okBtn = $("dlg-ok");
   okBtn.disabled = true;
@@ -719,7 +847,7 @@ async function dropFiles(files, bank, n) {
     const lower = f.name.toLowerCase();
     const bytes = new Uint8Array(await f.arrayBuffer());
     if (lower.endsWith(".smartmare")) await openProjectBytes(bytes, f.name);
-    else if (lower.endsWith(".sp202bak")) { if (state.work) importBackup(bytes, f.name); else note("Read the card or open a card backup first.", "err"); }
+    else if (lower.endsWith(".sp202bak")) { if (state.work) importBackup(bytes, f.name); else note("Read the card or open a card image first.", "err"); }
     else if (lower.endsWith(".img") || bytes.length === SM.IMAGE_BYTES) openImage(bytes, f.name);
     else if (lower.endsWith(".sp202pad")) {
       if (n === undefined) { bank = state.bank; n = state.selected; }
@@ -753,7 +881,7 @@ function renderProject() {
 }
 
 async function saveProject() {
-  if (!state.work && !Object.keys(state.pending).length) { note("Nothing to save yet: READ the card, open a card backup, or drop audio files.", "err"); return; }
+  if (!state.work && !Object.keys(state.pending).length) { note("Nothing to save yet: READ the card, open a card image, or drop audio files.", "err"); return; }
   const name = projName();
   try {
     const bytes = Project.save(state, name);
@@ -777,14 +905,14 @@ function exportProject() {
 }
 
 async function saveSetToCard() {
-  if (!state.work && !Object.keys(state.pending).length) { note("Nothing to save yet: READ CARD, open a card backup, or drop audio files.", "err"); return; }
+  if (!state.work && !Object.keys(state.pending).length) { note("Nothing to save yet: READ CARD, open a card image, or drop audio files.", "err"); return; }
   const name = projName(), link = state.link;
   state.busy = true;
   renderButtons();
   try {
     display("SEt", "SAVING THE SET");
-    const bytes = await Project.gzip(Project.save(state, name));
-    log(`saving sample set "${name}" on the card (${(bytes.length / 1048576).toFixed(2)} MB compressed)`, "info");
+    const bytes = Project.save(state, name, true);
+    log(`saving sample set "${name}" on the card (${(bytes.length / 1048576).toFixed(2)} MB)`, "info");
     await link.saveSet(name, bytes, (n, t) => display(String(Math.round(100 * n / t)).padStart(3, " ").slice(-3), `SAVING SET ${Math.round(100 * n / t)}%`));
     savedSnapshot = projectSignature();
     log(`sample set "${name}" saved on the card`, "info");
@@ -840,7 +968,7 @@ async function showProjects() {
       const row = document.createElement("div");
       row.className = "proj-row";
       row.innerHTML = `<div><b></b><span>${it.stamp ? new Date(it.stamp * 1000).toLocaleString([], { timeZone: "UTC" }) + " · " : ""}${(it.length / 1048576).toFixed(2)} MB</span></div>
-        <button class="key small" data-a="open">OPEN</button><button class="key small danger" data-a="del">DELETE</button>`;
+        <button class="key small act" data-a="open">OPEN</button><button class="key small act" data-a="del">DELETE</button>`;
       row.querySelector("b").textContent = it.name;
       row.querySelector('[data-a="open"]').onclick = async () => {
         dlg.close();
@@ -875,13 +1003,12 @@ function ask(title, html, okText = "OK") {
 
 // ---------- events ----------
 function bind() {
-  $("btn-connect").onclick = connect;
+  $("btn-connect").onclick = () => connect();      // not connect(event): it takes a port
   $("btn-read").onclick = readCard;
   $("btn-write").onclick = writeCard;
   $("btn-open").onclick = () => $("file-open").click();
   $("file-open").onchange = async e => { const f = e.target.files[0]; if (f) openImage(new Uint8Array(await f.arrayBuffer()), f.name); e.target.value = ""; };
   $("btn-save").onclick = () => { state.work.finalize(); download(state.work.img, `${projName()}-card-backup-${new Date().toISOString().slice(0, 10)}.img`); };
-  $("btn-revert").onclick = () => { state.work = state.base.clone(); state.source = "card"; edited("changes undone"); imageChecks(); };
   $("btn-export").onclick = () => { const s = selectedEntry(); if (s && !s.e.empty) download(SM.padFile(s.sp, s.e), `${s.e.name}.sp202pad`); };
   $("btn-import").onclick = () => $("file-pad").click();
   $("file-pad").onchange = async e => { const f = e.target.files[0]; if (f) await dropFiles([f], state.bank, state.selected); e.target.value = ""; };
@@ -900,42 +1027,60 @@ function bind() {
     s.sp.clear(s.e.index);
     edited(`${s.e.name} cleared`);
   };
-  $("btn-wav").onclick = () => {
-    const s = selectedEntry();
-    if (!s || s.e.empty) return;
-    const p = padSound(s.sp, s.e);
-    download(wavFile(p.l, s.e.rate, p.r), `${s.e.name}.wav`);
-  };
   $("btn-set-card").onclick = saveSetToCard;
   $("btn-erase-all").onclick = eraseCard;
   bindFirmware();
-  $("btn-bk-a").onclick = () => { state.bank = "A"; render(); $("sec-pads").scrollIntoView({ behavior: "smooth" }); };
-  $("btn-bk-b").onclick = () => { state.bank = "B"; render(); $("sec-pads").scrollIntoView({ behavior: "smooth" }); };
   $("btn-bk-export").onclick = exportBackup;
   $("btn-bk-import").onclick = () => $("file-backup").click();
   $("file-backup").onchange = async e => { const f = e.target.files[0]; if (f) importBackup(new Uint8Array(await f.arrayBuffer()), f.name); e.target.value = ""; };
   $("btn-proj-open").onclick = showProjects;
   $("proj-close").onclick = () => $("projects").close();
   $("proj-name").addEventListener("keydown", e => e.stopPropagation());
-  const db = $("detail-body");
-  db.addEventListener("click", e => {
-    const b = e.target.closest("button[data-set]");
-    if (b) applySetting(b.dataset.set, +b.dataset.v);
-  });
-  db.addEventListener("change", e => {
-    const t = e.target.closest("select[data-set], input[data-set]");
-    if (t) applySetting(t.dataset.set, +t.value);
-  });
-  db.addEventListener("input", e => {
-    if (e.target.matches('input[data-set="level"]')) e.target.nextElementSibling.textContent = e.target.value;
-  });
+  for (const db of [$("editor"), $("pad-info")]) {     // the pad settings, CHANNELS and BPM
+    db.addEventListener("click", e => {
+      const b = e.target.closest("button[data-set]");
+      if (b) applySetting(b.dataset.set, +b.dataset.v);
+    });
+    db.addEventListener("change", e => {
+      const t = e.target.closest("select[data-set], input[data-set]");
+      if (t) applySetting(t.dataset.set, +t.value);
+    });
+    db.addEventListener("input", e => {
+      if (e.target.matches('input[data-set="level"]')) e.target.nextElementSibling.textContent = e.target.value;
+    });
+  }
   $("btn-status").onclick = () => state.link?.send("s");
   $("btn-loglevel").onclick = () => state.link?.send("v");
   $("btn-logclear").onclick = () => { $("log").innerHTML = ""; };
 
-  document.querySelectorAll(".bank").forEach(b => b.onclick = () => { state.bank = b.dataset.bank; render(); });
+  document.querySelectorAll(".bank").forEach(b => {
+    b.onclick = () => { state.bank = b.dataset.bank; render(); };
+    // while a pad is dragged, holding it over a bank button opens that bank (copy C1 to A1)
+    b.addEventListener("dragover", e => {
+      if (!e.dataTransfer.types.includes("application/x-sp202-pad")) return;
+      e.preventDefault();
+      if (state.bank !== b.dataset.bank) { state.bank = b.dataset.bank; renderPads(); }
+    });
+  });
 
+  $("area-row").addEventListener("click", e => {
+    const b = e.target.closest("[data-area]");
+    if (!b) return;
+    state.area = +b.dataset.area;
+    if (!isInternal(state.bank)) state.bank = "A";
+    state.editorKey = null;
+    log(`banks A/B: backup ${state.area}`);
+    render();
+  });
   const pads = $("pads");
+  const fit = new ResizeObserver(() => { fitPads(); fitLcd(); });
+  fit.observe(pads);
+  fit.observe(document.querySelector("#editor .lcd"));   // its top line can wrap
+  $("mem-info-btn").onclick = () => {
+    const open = $("mem-info").hidden;
+    $("mem-info").hidden = !open;
+    $("mem-info-btn").setAttribute("aria-expanded", String(open));
+  };
   pads.addEventListener("click", e => {
     const p = e.target.closest(".pad");
     if (!p) return;
@@ -1008,16 +1153,15 @@ function bind() {
 
 async function start() {
   editor = new WaveEditor($("editor"), onEditorChange);
-  editor.onLoad = src => commitPending(src.pad);
-  editor.onSaveWav = async src => {
-    if (src.kind === "marks") {               // a card pad: START–END of the decoded sound
-      const k = src.spb, [l, r] = src.lr || [src.data];
-      download(wavFile(l.subarray(src.start * k, src.end * k), src.rate, r && r.subarray(src.start * k, src.end * k)), `${src.fileName}.wav`);
-      return;
-    }
-    const rate = SM.RATES[src.grade];
-    const r = await Audio202.resample(src.data.subarray(Math.floor(src.start), Math.floor(src.end)), src.rate, rate);
-    download(wavFile(r, rate), `${src.fileName.replace(/\.[^.]+$/, "")}-${SM.SHORT[src.grade].toLowerCase()}.wav`);
+  editor.onLoad = src => src.kind === "marks" ? resamplePad(src) : commitPending(src.pad);
+  editor.onTruncate = truncatePad;
+  editor.onSaveWav = async src => {           // what ▶ AS SP-202 plays: START–STOP, the quality, at 31.25 kHz
+    const s = await editor.sound202();
+    if (!s) return;
+    const [l, r] = s.chans.map(c => Audio202.toSP202(c, s.rate));
+    download(wavFile(l.data, l.rate, r && r.data),
+      `${src.fileName.replace(/\.[^.]+$/, "")}-${SM.SHORT[src.grade].toLowerCase()}.wav`);
+    log(`${src.fileName}: exported START–STOP as ${SM.GRADES[src.grade]}${r ? " STEREO" : ""}, ${(l.data.length / l.rate).toFixed(2)} s at ${l.rate} Hz`, "info");
   };
   bind();
   renderChecks();
@@ -1027,10 +1171,8 @@ async function start() {
     note(NO_SERIAL, "err");
   }
   check("usb", "wait", "press CONNECT and pick the card");
-  display("202", "READY");
   render();
-  display("202", "READY");
-  log("ready. CONNECT the card (SP-202 off to read or write), or open a sample set or a card backup.", "info");
+  log("ready. CONNECT the card (SP-202 off to read or write), or open a sample set or a card image.", "info");
   // For tests from a local server: ?img=<url of an image file>
   const url = new URLSearchParams(location.search).get("img");
   if (url) {

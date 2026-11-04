@@ -2,7 +2,7 @@
  * SmartMare 5V - simulated SP-202 driving the real bus, for the self test
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * A simulated SP-202 for the on-card self test, driving the real PIO bus engine.

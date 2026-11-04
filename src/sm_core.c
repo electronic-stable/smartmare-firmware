@@ -2,7 +2,7 @@
  * SmartMare 5V - SmartMedia command set: reset, ID, read, program, erase
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "sm_core.h"
@@ -167,7 +167,7 @@ uint8_t sm_core_read(sm_core_t *c) {
     case SM_OUT_STATUS:
         return sm_core_status(c);
     case SM_OUT_ID: {
-        uint8_t v = c->id_index == 0 ? c->maker_id : c->id_index == 1 ? SM_DEVICE_ID_4MB_5V : 0xFF;
+        uint8_t v = c->id_index == 0 ? c->maker_id : c->id_index == 1 ? SM_DEVICE_ID : 0xFF;
         if (c->id_index < 2)
             c->id_index++;
         return v;

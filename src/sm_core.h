@@ -2,7 +2,7 @@
  * SmartMare 5V - SmartMedia command set: reset, ID, read, program, erase
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * SmartMedia device behaviour (SmartMedia Electrical Spec 1999, §5, §6, §8), hardware free.
@@ -28,6 +28,12 @@
 #define SM_PAGE_MASK      (SM_PAGES - 1)                   // PA0..PA12
 
 #define SM_DEVICE_ID_4MB_5V 0x6B
+// The device code answered to Read ID: a research build may claim another card (0xE6 = 8 MB).
+#ifdef SM_DEVICE_ID_OVERRIDE
+#define SM_DEVICE_ID SM_DEVICE_ID_OVERRIDE
+#else
+#define SM_DEVICE_ID SM_DEVICE_ID_4MB_5V
+#endif
 
 // Latch flags, sampled with the byte on the rising edge of /WE
 #define SM_LATCH_CLE 0x01

@@ -3,14 +3,15 @@
   SmartMare 5V - generic loader: read, back up, restore and erase the card over USB
 
   Fabien Roffet for Electronic Stable - smartmare.com
-  Version 1.0.0 - 2 Nov 2026
+  Version 1.2.0 - 4 Nov 2026
   SPDX-License-Identifier: MIT
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SmartMare : Card Manager v.1.0</title>
+<meta name="smartmare-page" content="generic">
+<title>SmartMare : Generic Card Manager v%VERSION%</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,13 +19,12 @@
 
   <header class="plate">
     <div class="brand">
-      <div class="brand-main">SMARTMARE : <span>CARD MANAGER</span> <small>v.1.0</small></div>
+      <div class="brand-main">SMARTMARE : <span>GENERIC CARD MANAGER</span> <small>v%VERSION%</small></div>
       <div class="brand-sub">Electronic Stable · SmartMedia 4MB 5V emulator</div>
     </div>
 
     <div class="display-wrap">
       <div class="display" id="display" aria-live="polite"></div>
-      <div class="display-label" id="display-label">READY</div>
     </div>
 
     <div class="leds">
@@ -40,9 +40,9 @@
       <p>Connect the card over USB and read it. Take it out of the device, or switch the device off, first.</p></header>
     <div class="sec-body">
       <div class="btn-row">
-        <button class="key" id="btn-connect"><span class="key-led"></span>CONNECT</button>
-        <button class="key" id="btn-read" disabled><span class="key-led"></span>READ CARD</button>
-        <button class="key key-rec" id="btn-write" disabled><span class="key-led"></span>WRITE CARD <b id="write-count"></b></button>
+        <button class="key small act" id="btn-connect"><span class="key-led"></span>CONNECT</button>
+        <button class="key small act" id="btn-read" disabled><span class="key-led"></span>READ CARD</button>
+        <button class="key small act" id="btn-write" disabled><span class="key-led"></span>WRITE CARD <b id="write-count"></b></button>
       </div>
       <div class="card-status" id="card-status">Not connected.</div>
       <div class="pads-note" id="note"></div>
@@ -53,47 +53,43 @@
     </div>
   </section>
 
-  <!-- BACKUP CARD -->
-  <section class="sec" id="sec-backup-card">
-    <header class="sec-head"><span class="sec-num"></span><h2>BACKUP CARD</h2>
-      <p>A copy of the whole card, exactly as the device wrote it (.img), to keep or to put back.</p></header>
-    <div class="sec-body">
-      <div class="btn-row">
-        <button class="key small" id="btn-save" disabled title="Save the whole card as a .img file">SAVE CARD BACKUP</button>
-        <button class="key small" id="btn-open" title="Open a .img file; then WRITE CARD puts it back">OPEN CARD BACKUP</button>
-        <button class="key small" id="btn-revert" disabled title="Back to what the card holds">UNDO ALL</button>
-      </div>
-      <p class="hint" id="image-info">READ CARD to see what the card holds.</p>
-      <input type="file" id="file-open" accept=".img,.bin" hidden>
-    </div>
-  </section>
-
   <!-- CARD TOOLS -->
   <section class="sec" id="sec-tools">
     <header class="sec-head"><span class="sec-num"></span><h2>CARD TOOLS</h2>
-      <p>Update the card's firmware, or erase the card. Out of the device.</p></header>
+      <p>Image, firmware and erase. Take the card out of the device first.</p></header>
     <div class="sec-body tools">
       <div class="tool">
-        <div class="sub-head first">FIRMWARE UPDATE</div>
-        <p class="hint">What the card holds stays on it.<br>
-          1. CHOOSE the new firmware (a .uf2 file). 2. CONNECT, then UPDATE: the card restarts in update
-          mode and shows as a drive named RP2350. 3. COPY TO RP2350 and pick that drive: the card takes the
-          new firmware and restarts with it. Then CONNECT again.</p>
+        <div class="sub-head first">CARD IMAGE</div>
+        <p class="hint">The whole card in one .img file, exactly as the device wrote it, to keep or to put back.</p>
+        <p class="hint" id="image-info">READ CARD to see what the card holds.</p>
         <div class="btn-row">
-          <button class="key small" id="btn-fw-file">CHOOSE .UF2…</button>
-          <span class="fw-file" id="fw-file">no file chosen</span>
-          <button class="key small key-rec" id="btn-fw-go" disabled>UPDATE</button>
-          <button class="key small" id="btn-fw-copy" hidden>COPY TO RP2350…</button>
+          <button class="key small act" id="btn-save" disabled title="Save the whole card as a .img file">SAVE BACKUP</button>
+          <button class="key small act" id="btn-open" title="Open a .img file; then WRITE CARD puts it back">OPEN BACKUP</button>
         </div>
+        <input type="file" id="file-open" accept=".img,.bin" hidden>
+      </div>
+      <div class="tool">
+        <div class="sub-head first">FIRMWARE UPDATE</div>
+        <p class="hint">What the card holds stays. CONNECT, then GET (or CHOOSE .UF2) and UPDATE: the card updates itself and restarts. Firmware before 1.2.0: COPY TO RP2350 and pick that drive.</p>
+        <div class="fw-file" id="fw-file">no file chosen</div>
+        <div class="fw-status" id="fw-now"></div>
+        <div class="fw-status" id="update-info"></div>
         <div class="fw-status" id="fw-status"></div>
+        <div class="btn-row">
+          <button class="key small act" id="btn-fw-check" title="Asks smartmare.com for the latest firmware and Card Manager">CHECK UPDATES</button>
+          <button class="key small act" id="btn-fw-latest" hidden title="Gets the latest firmware from smartmare.com and checks it; then UPDATE">GET</button>
+          <button class="key small act" id="btn-fw-file">CHOOSE .UF2…</button>
+          <button class="key small act" id="btn-fw-go" disabled>UPDATE</button>
+          <button class="key small act" id="btn-fw-copy" hidden>COPY TO RP2350…</button>
+          <button class="key small act" id="btn-fw-back" hidden>GO BACK</button>
+        </div>
         <input type="file" id="file-fw" accept=".uf2" hidden>
       </div>
       <div class="tool">
         <div class="sub-head first">ERASE THE CARD</div>
-        <p class="hint">A blank card, as from the factory: everything the device stored is erased.
-          SAVE CARD BACKUP first to keep it. Then format the card in the device.</p>
+        <p class="hint">A blank card, as from the factory: everything the device stored is erased. SAVE BACKUP first; then format the card in the device.</p>
         <div class="btn-row">
-          <button class="key small danger" id="btn-erase" disabled>ERASE CARD…</button>
+          <button class="key small act" id="btn-erase" disabled>ERASE CARD…</button>
         </div>
       </div>
     </div>
@@ -104,26 +100,26 @@
     <header class="sec-head"><span class="sec-num"></span><h2>LIVE LOG</h2>
       <p>Everything the card says.</p>
       <span class="log-tools">
-        <button class="key tiny" id="btn-status" disabled>STATUS</button>
-        <button class="key tiny" id="btn-loglevel" disabled>FW LOG: QUIET</button>
+        <button class="key small act" id="btn-status" disabled>STATUS</button>
+        <button class="key small act" id="btn-loglevel" disabled>FW LOG: QUIET</button>
         <label><input type="checkbox" id="log-scroll" checked> follow</label>
-        <button class="key tiny" id="btn-logclear">CLEAR</button>
+        <button class="key small act" id="btn-logclear">CLEAR</button>
       </span></header>
     <div id="log" class="log-body" role="log"></div>
   </section>
 
-  <footer class="foot">SmartMare by Electronic Stable. Not affiliated with Roland, BOSS or the owners of the SmartMedia trademark.</footer>
+  <footer class="foot">SmartMare by Electronic Stable. SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland Corporation. SmartMare and Electronic Stable are not affiliated with them.</footer>
 </div>
 
-<div class="dropzone" id="dropzone"><div>Drop a <b>.img</b> card backup to open it</div></div>
+<div class="dropzone" id="dropzone"><div>Drop a <b>.img</b> card image to open it</div></div>
 
 <dialog id="dialog">
   <form method="dialog">
     <h2 id="dlg-title"></h2>
     <div id="dlg-body"></div>
     <menu>
-      <button value="cancel" class="key small" id="dlg-cancel">CANCEL</button>
-      <button value="ok" class="key small key-rec" id="dlg-ok">OK</button>
+      <button value="cancel" class="key small act" id="dlg-cancel">CANCEL</button>
+      <button value="ok" class="key small act" id="dlg-ok">OK</button>
     </menu>
   </form>
 </dialog>
@@ -132,6 +128,7 @@
 <script src="js/serial.js"></script>
 <script src="js/segments.js"></script>
 <script src="js/firmware.js"></script>
+<script src="js/update.js"></script>
 <script src="js/generic.js"></script>
 </body>
 </html>

@@ -1,12 +1,12 @@
 /*
- * SmartMare 5V - trim screen: waveform, start / end, zoom, loop and preview
+ * SmartMare 5V - sound editor: waveform, start and stop points, zoom and preview
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The trim screen: an MPC-style LCD with the waveform, START / END flags, zoom, and the
- * player (whole sample, selection, loop, preview at an SP-202 grade).
+ * player (whole sample, start to stop point, and preview as the SP-202 plays an SP-202 quality).
  *
  * Two kinds of source:
  *  - audio: samples in the page (a dropped file), Float32 mono at its own rate;
@@ -47,16 +47,35 @@ const Audio202 = (() => {
   function stop() {
     if (current) { try { current.src.stop(); } catch (e) {} current = null; }
   }
+  // The SP-202's grades are 31250 Hz divided by 1, 2, 4 and 8: it plays at 31.25 kHz and repeats
+  // each sample of a lower grade, which is where the LO-FI grit comes from. Sounds at those rates
+  // are played the same way (the browser would otherwise smooth them).
+  const SP202_RATE = 31250;
+  function holdOf(rate) {
+    const q = SP202_RATE / rate;
+    return q >= 2 && Math.abs(q - Math.round(q)) < 1e-6 ? Math.round(q) : 1;
+  }
+  function held(d, from, n, f) {
+    if (f === 1) return d.subarray(from, from + n);
+    const out = new Float32Array(n * f);
+    for (let i = 0; i < n; i++) out.fill(d[from + i], i * f, i * f + f);
+    return out;
+  }
+  // A sound at an SP-202 grade rate as the SP-202 puts it out: {data, rate} at 31250 Hz.
+  function toSP202(data, rate) {
+    const f = holdOf(rate);
+    return { data: held(data, 0, data.length, f), rate: rate * f };
+  }
   // Plays data[from..to) at `rate`. Returns {startedAt, from, to, rate, loop}.
   // right: the right channel of a stereo sound (same length), or nothing for mono.
   function play(data, rate, from = 0, to = data.length, loop = false, onEnd, right) {
     stop();
     const c = context();
     if (c.state === "suspended") c.resume();
-    const n = Math.max(1, to - from);
-    const b = c.createBuffer(right ? 2 : 1, n, rate);
-    b.copyToChannel(data.subarray(from, from + n), 0);
-    if (right) b.copyToChannel(right.subarray(from, from + n), 1);
+    const n = Math.max(1, to - from), f = holdOf(rate);
+    const b = c.createBuffer(right ? 2 : 1, n * f, rate * f);
+    b.copyToChannel(held(data, from, n, f), 0);
+    if (right) b.copyToChannel(held(right, from, n, f), 1);
     const src = c.createBufferSource();
     src.buffer = b;
     src.loop = loop;
@@ -75,8 +94,44 @@ const Audio202 = (() => {
     if (!current.loop && t >= len) return null;
     return { at: current.from + (current.loop ? t % len : t), ...current };
   }
-  return { decodeFile, resample, play, stop, position, context };
+  return { decodeFile, resample, toSP202, play, stop, position, context };
 })();
+
+// The part of a source between its marks, at the chosen quality and channels, ready for the
+// codec: {parts: [left, right?], rate, gain, region}. A file is brought to 0.63 of full scale
+// (the level of the SP-202's own recordings); a card pad keeps its level, and is redone from its
+// original file when the page still has it (region: the part of that file used).
+async function soundParts(s) {
+  const rate = SM.RATES[s.grade];
+  let chans, from, gain = 1, region = null;
+  if (s.kind === "audio") {
+    const st = s.settings?.stereo && s.chans?.length > 1;
+    chans = (st ? s.chans.slice(0, 2) : [s.data]).map(d => d.subarray(Math.floor(s.start), Math.floor(s.end)));
+    from = s.rate;
+    gain = null;
+  } else if (s.original) {                       // card bytes 0..total hold the file's from..to
+    const o = s.original, k = (o.to - o.from) / s.total;
+    region = [o.from + Math.round(s.start * k), o.from + Math.round(s.end * k)];
+    const st = s.wantStereo && o.chans.length > 1;
+    chans = (st ? o.chans.slice(0, 2) : [o.data]).map(d => d.subarray(region[0], region[1]));
+    from = o.rate;
+    gain = o.gain;
+  } else {
+    const a = Math.floor(s.start * s.spb), b = Math.floor(s.end * s.spb);
+    const st = (s.wantStereo ?? s.stereo) && s.lr;
+    chans = (st ? s.lr : [s.data]).map(d => d.subarray(a, b));
+    from = s.rate;
+  }
+  const parts = [];
+  for (const d of chans) parts.push(Float32Array.from(await Audio202.resample(d, from, rate)));
+  if (gain === null) {
+    let peak = 0;
+    for (const p of parts) for (const v of p) peak = Math.max(peak, Math.abs(v));
+    gain = peak > 0 ? 0.63 / peak : 1;
+  }
+  if (gain !== 1) for (const p of parts) for (let i = 0; i < p.length; i++) p[i] *= gain;
+  return { parts, rate, gain, region };
+}
 
 class WaveEditor {
   constructor(root, onChange) {
@@ -86,7 +141,6 @@ class WaveEditor {
     this.src = null;
     this.view = [0, 1];             // visible window [from, to) in units (samples or bytes)
     this.drag = null;
-    this.loop = false;
     this.bind();
     new ResizeObserver(() => this.draw()).observe(this.canvas);
     const tick = () => { this.drawPlayhead(); requestAnimationFrame(tick); };
@@ -108,7 +162,7 @@ class WaveEditor {
     const s = this.src;
     if (!s) return 0;
     if (s.kind === "audio") return u / s.rate;
-    return u * 2 / (s.stereo ? 2 : 1) / SM.RATES[s.grade];
+    return u * 2 / (s.stereo ? 2 : 1) / SM.RATES[s.origGrade ?? s.grade];   // the pad's own quality, not the one chosen
   }
 
   // ---------- drawing ----------
@@ -179,7 +233,8 @@ class WaveEditor {
     g.putImageData(this.lastFrame, 0, 0);
     this.wasPlaying = !!p;
     if (!p || p.source !== s) { this.root.querySelector(".lcd-play").textContent = ""; return; }
-    const at = s.kind === "audio" ? p.at * s.rate / p.rate : p.at / this.spu();   // back to the source's units
+    const n = p.at * s.rate / p.rate;                                       // in samples of the source
+    const at = (p.base || 0) + (s.kind === "audio" ? n : n / this.spu());   // back to the source's units
     const x = this.x(at), { h, dpr } = this.size();
     g.fillStyle = getComputedStyle(this.root).getPropertyValue("--lcd-ink").trim();
     g.globalAlpha = .6;
@@ -192,28 +247,34 @@ class WaveEditor {
     const s = this.src, f = this.root.querySelector(".lcd-fields"), head = this.root.querySelector(".lcd-title");
     const b = this.root.querySelectorAll("[data-ed]");
     if (!s || s.kind === "none") {
-      head.textContent = s?.title || "TRIM";
+      head.textContent = s?.title || "MARK";
       f.innerHTML = `<span>${s?.info || "DROP AN AUDIO FILE ON A PAD, OR SELECT A PAD"}</span>`;
       b.forEach(x => x.disabled = true);
-      this.root.querySelector(".grade-sel").disabled = true;
+      this.root.querySelectorAll("[data-grade]").forEach(x => { x.disabled = true; x.classList.remove("on"); });
       return;
     }
     head.textContent = s.title;
     const len = s.end - s.start;
     const t = u => this.seconds(u).toFixed(3);
-    f.innerHTML = `<span>ST <b>${t(s.start)}</b></span><span>END <b>${t(s.end)}</b></span>
+    f.innerHTML = `<span>START <b>${t(s.start)}</b></span><span>STOP <b>${t(s.end)}</b></span>
       <span>LEN <b>${t(len)}</b> s</span><span>${s.info || ""}</span>`;
     b.forEach(x => {
       const a = x.dataset.ed;
-      const needs = ["preview", "load"].includes(a) ? s.kind === "audio"
-        : ["play", "playsel", "loop", "savewav"].includes(a) ? !!s.data : true;
+      // card pad: LOAD TO PAD for a new quality or channels, TRUNCATE for the marks
+      const reload = s.kind === "marks" && (s.grade !== s.origGrade || (s.wantStereo ?? s.stereo) !== s.stereo);
+      const needs = a === "preview" ? (s.kind === "audio" || s.kind === "marks") && !!s.data
+        : a === "load" ? s.kind === "audio" || reload
+        : a === "truncate" ? s.kind === "marks" && (s.start > 0 || s.end < s.total)
+        : ["play", "playsel", "savewav"].includes(a) ? !!s.data : true;
       x.disabled = !needs || (!s.editable && /^(s|e)[-+]/.test(a));
     });
-    this.root.querySelector('[data-ed="loop"]').classList.toggle("lit", this.loop);
-    const gs = this.root.querySelector(".grade-sel");
-    gs.value = String(s.grade);
-    gs.disabled = s.kind !== "audio";
-    this.root.querySelector('[data-ed="load"]').title = "Encodes START–END for the SP-202 and puts it on the pad (then WRITE CARD)";
+    const can = s.kind === "audio" || (s.kind === "marks" && !!s.data);
+    this.root.querySelectorAll("[data-grade]").forEach(x => {   // a card pad only goes down, unless its file is known
+      x.classList.toggle("on", +x.dataset.grade === s.grade);
+      x.disabled = !can || (s.kind === "marks" && +x.dataset.grade < (s.minGrade ?? s.origGrade));
+    });
+    this.root.querySelector('[data-ed="load"]').title =
+      "Puts START–STOP on the pad at the chosen quality and channels; the rest is cut and its memory freed (then WRITE CARD)";
   }
 
   // ---------- editing ----------
@@ -248,15 +309,28 @@ class WaveEditor {
     if (!s || !s.data) return;
     const k = this.spu(), from = sel ? s.start * k : 0, to = sel ? s.end * k : s.data.length;
     const [l, r] = s.lr || [s.data];
-    Audio202.play(l, s.rate, Math.floor(from), Math.floor(to), this.loop && sel, undefined, r).source = s;
+    Audio202.play(l, s.rate, Math.floor(from), Math.floor(to), false, undefined, r).source = s;
   }
-  async preview() {
+  // START–STOP as the SP-202 would play it at the chosen quality: resampled, encoded and decoded
+  // with its codec (what goes on the card). Returns {chans: [left, right?], rate}, or null.
+  // ▶ AS SP-202 plays it, EXPORT WAV saves it.
+  async sound202() {
     const s = this.src;
-    if (!s || s.kind !== "audio") return;
-    const rate = SM.RATES[s.grade];
-    const part = s.data.subarray(Math.floor(s.start), Math.floor(s.end));
-    const r = await Audio202.resample(part, s.rate, rate);
-    Audio202.play(r, rate, 0, r.length, this.loop);
+    if (!s || !s.data || (s.kind !== "audio" && s.kind !== "marks")) return null;
+    const { parts, rate } = await soundParts(s);
+    const out = parts.length > 1
+      ? Codec202.decodeStereo(Codec202.encodeStereo(parts[0], parts[1]).bytes)
+      : [Codec202.decode(Codec202.encode(parts[0]).bytes)];
+    return { chans: out, rate };
+  }
+  // Plays sound202(); the playhead follows.
+  async preview() {
+    const s = this.src, r = await this.sound202();
+    if (!r) return;
+    const [l, right] = r.chans;
+    const p = Audio202.play(l, r.rate, 0, l.length, false, undefined, right);
+    p.source = s;
+    p.base = s.start;                            // the playhead counts from START
   }
 
   bind() {
@@ -268,7 +342,6 @@ class WaveEditor {
       if (a === "play") this.playIt(false);
       else if (a === "playsel") this.playIt(true);
       else if (a === "stop") Audio202.stop();
-      else if (a === "loop") { this.loop = !this.loop; this.renderFields(); }
       else if (a === "preview") this.preview();
       else if (a === "zin") this.zoom(0.5);
       else if (a === "zout") this.zoom(2);
@@ -280,12 +353,14 @@ class WaveEditor {
       else if (a === "e+") this.setFlag("end", s.end + this.step(e.shiftKey));
       else if (a === "savewav") this.onSaveWav?.(s);
       else if (a === "load") this.onLoad?.(s);
+      else if (a === "truncate") this.onTruncate?.(s);
     });
-    r.querySelector(".grade-sel").addEventListener("change", e => {
-      if (!this.src) return;
-      this.src.grade = +e.target.value;
+    r.querySelector(".grade-seg").addEventListener("click", e => {
+      const b = e.target.closest("[data-grade]");
+      if (!this.src || !b || b.disabled) return;
+      this.src.grade = +b.dataset.grade;
       this.renderFields();
-      this.onChange?.(this.src);
+      if (this.src.kind === "audio") this.onChange?.(this.src);           // a card pad changes on RELOAD TO PAD
     });
     const cv = this.canvas;
     const unitAt = e => this.u((e.clientX - cv.getBoundingClientRect().left) * (devicePixelRatio || 1));

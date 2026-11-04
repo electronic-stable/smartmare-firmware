@@ -2,7 +2,7 @@
  * SmartMare 5V - sample sets: the whole work in one .smartmare file
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.0.0 - 2 Nov 2026
+ * Version 1.2.0 - 4 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Sample sets: the whole work in one file. A set keeps the card image being edited
@@ -51,8 +51,10 @@ const Project = (() => {
     return out;
   }
 
-  // state -> bytes
-  function save(state, name) {
+  // state -> bytes. forCard: for a set kept on the card, the image keeps only its used blocks
+  // (no gzip needed, and the card can reach every pad), and a pad index is appended for the
+  // card's firmware, which shows each pad of the set as a WAV file on its USB drive.
+  function save(state, name, forCard = false) {
     const parts = [];
     const add = u8 => { parts.push(u8); return parts.length - 1; };
     const pending = Object.entries(state.pending).map(([pad, p]) => ({
@@ -64,13 +66,82 @@ const Project = (() => {
       }),
     }));
     if (state.work) state.work.finalize();
+    let image = null, imageSparse = null;
+    if (state.work && forCard) {
+      const used = state.work.usedBlocks(), map = new Uint16Array(SM.BLOCKS);
+      const data = new Uint8Array(used.length * SM.BLOCK_BYTES);
+      used.forEach((b, k) => { map[b] = k + 1; data.set(state.work.blockBytes(b), k * SM.BLOCK_BYTES); });
+      imageSparse = { map: add(new Uint8Array(map.buffer)), data: add(data) };
+    } else if (state.work) image = add(state.work.img);
     const meta = {
-      app: "SmartMare Pad Editor", version: 2, name, savedAt: new Date().toISOString(),
+      app: "SmartMare SP-202 Card Manager", version: forCard ? 3 : 2, name, savedAt: new Date().toISOString(),
       bank: state.bank, selected: state.selected, source: state.source,
-      image: state.work ? add(state.work.img) : null, pending,
+      image, imageSparse, pending,
       names: names(state),
     };
-    return pack(meta, parts);
+    const bytes = pack(meta, parts);
+    return forCard ? withPadIndex(state, bytes, parts, imageSparse, pending) : bytes;
+  }
+
+  // The pad index read by the card's firmware (src/usb/usb_drive.c), appended after the parts:
+  //   header  u32 count, u32 map offset, u32 data offset, u32 0     (offsets from the file start)
+  //   entries 64 bytes: name (UTF-8, 40 bytes, 0-padded), u8 kind, u8 channels, u16 0, u32 rate,
+  //           kind 0 (SP-202 sample in the image): u32 card address, u32 length in bytes
+  //           kind 1 (16-bit audio waiting): u32 left offset, u32 right offset (0 if mono), u32 samples
+  //   footer  "SMPADIX1", u32 index offset, u32 index length
+  function withPadIndex(state, bytes, parts, imageSparse, pending) {
+    const base = 12 + new DataView(bytes.buffer).getUint32(8, true);
+    const at = [];
+    let o = base;
+    for (const p of parts) { at.push(o); o += p.byteLength; }
+    const clean = s => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim();
+    const entries = [];
+    if (state.work) {
+      for (const kind of ["card", "backup"]) {
+        const sp = new SM.Space(state.work, kind);
+        if (!sp.present()) continue;
+        for (const e of sp.used()) {
+          const title = typeof padNames !== "undefined" ? padNames[sampleKey(sp.sample(e))] || "" : "";
+          entries.push({ name: clean(`${e.name} ${title}`), kind: 0, channels: e.stereo ? 2 : 1,
+                         rate: Math.round(SM.RATES[e.grade]), a: sp.toCard(e.start), b: e.length, c: 0 });
+        }
+      }
+    }
+    for (const p of pending)
+      entries.push({ name: clean(`${p.pad} ${p.fileName.replace(/\.[^.]+$/, "")} (to write)`), kind: 1,
+                     channels: p.chans.length, rate: Math.round(p.rate), a: at[p.chans[0]],
+                     b: p.chans.length > 1 ? at[p.chans[1]] : 0, c: parts[p.chans[0]].byteLength / 2 });
+    const index = new Uint8Array(16 + 64 * entries.length), dv = new DataView(index.buffer);
+    dv.setUint32(0, entries.length, true);
+    dv.setUint32(4, imageSparse ? at[imageSparse.map] : 0, true);
+    dv.setUint32(8, imageSparse ? at[imageSparse.data] : 0, true);
+    entries.forEach((e, k) => {
+      const q = 16 + 64 * k;
+      let name = new TextEncoder().encode(e.name);
+      for (let cut = e.name.length; name.length > 40; cut--) name = new TextEncoder().encode(e.name.slice(0, cut));
+      index.set(name, q);
+      index[q + 40] = e.kind; index[q + 41] = e.channels;
+      dv.setUint32(q + 44, e.rate, true); dv.setUint32(q + 48, e.a, true);
+      dv.setUint32(q + 52, e.b, true); dv.setUint32(q + 56, e.c, true);
+    });
+    const out = new Uint8Array(bytes.length + index.length + 16), fv = new DataView(out.buffer);
+    out.set(bytes, 0);
+    out.set(index, bytes.length);
+    out.set([..."SMPADIX1"].map(c => c.charCodeAt(0)), out.length - 16);
+    fv.setUint32(out.length - 8, bytes.length, true);
+    fv.setUint32(out.length - 4, index.length, true);
+    return out;
+  }
+
+  // The card image of a set: whole (version 2), or its used blocks (version 3, sets on the card).
+  function imageOf(meta, part) {
+    if (meta.image !== null && meta.image !== undefined) return new SM.Image(part(meta.image));
+    if (!meta.imageSparse) return null;
+    const map = new Uint16Array(part(meta.imageSparse.map).buffer), data = part(meta.imageSparse.data);
+    const img = new SM.Image();
+    for (let b = 0; b < SM.BLOCKS; b++)
+      if (map[b]) img.img.set(data.subarray((map[b] - 1) * SM.BLOCK_BYTES, map[b] * SM.BLOCK_BYTES), b * SM.BLOCK_BYTES);
+    return img;
   }
 
   // bytes -> {name, image (SM.Image|null), pending (state.pending), bank, selected}
@@ -96,7 +167,7 @@ const Project = (() => {
     }
     return {
       name: meta.name, savedAt: meta.savedAt, bank: meta.bank || "C", selected: meta.selected || 0,
-      image: meta.image === null ? null : new SM.Image(part(meta.image)), pending, names: meta.names || {},
+      image: imageOf(meta, part), pending, names: meta.names || {},
     };
   }
 
