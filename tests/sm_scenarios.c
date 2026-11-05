@@ -2,7 +2,7 @@
  * SmartMare 5V - SmartMedia command scenarios, as the SP-202 drives a card
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * SmartMedia command scenarios, shared by the host tests (RAM image) and the on-card

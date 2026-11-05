@@ -2,7 +2,7 @@
  * SmartMare 5V - generic loader page: read, back up, restore and erase the card
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * SmartMare Generic Card Manager: the page of the generic card (any device with a 5 V SmartMedia
@@ -182,7 +182,7 @@ function onClose() {
   render();
 }
 
-const NO_SERIAL = "This browser cannot open USB serial ports. Open this page in Chrome or Edge. Firefox and Safari cannot.";
+const NO_SERIAL = "This browser cannot open USB serial ports. Open this page in Chrome or Edge. Firefox 151 or later works too. Safari cannot.";
 
 async function connect(port) {
   if (state.link) { if (!port) await state.link.disconnect(); return; }
@@ -323,7 +323,7 @@ function start() {
   bind();
   renderChecks();
   if (CardLink.supported()) check("browser", "ok", "Web Serial available");
-  else { check("browser", "fail", "use Chrome, Edge, Opera or Brave on a computer"); note(NO_SERIAL, "err"); }
+  else { check("browser", "fail", "use Chrome or Edge on a computer (Opera, Brave or Firefox 151+ work too)"); note(NO_SERIAL, "err"); }
   check("usb", "wait", "press CONNECT and pick the card");
   display("---", "READY");
   render();

@@ -2,7 +2,7 @@
 SmartMare 5V - packs the loader page into the firmware's USB drive
 
 Fabien Roffet for Electronic Stable - smartmare.com
-Version 1.2.7 - 4 Nov 2026
+Version 1.2.8 - 5 Nov 2026
 SPDX-License-Identifier: GPL-3.0-or-later
 
 The files of the SmartMare USB drive: the card manager page in one HTML file, and a README.
@@ -39,7 +39,7 @@ README = """SmartMare - by Electronic Stable
 This drive is the SmartMare card itself.
 
 "%PAGE%" manages the card's pads:
-1. Open it in Chrome or Edge (Opera and Brave work too; Firefox and Safari cannot
+1. Open it in Chrome or Edge (Opera, Brave and Firefox 151+ work too; Safari cannot
    open USB serial ports).
 2. Keep the SP-202 off, press CONNECT and pick the SmartMare port.
 3. READ CARD shows banks C/D (the card) and A/B (the SP-202 backup bank).
@@ -61,7 +61,7 @@ README_GENERIC = """SmartMare - by Electronic Stable
 This drive is the SmartMare card itself: a 4MB 5V card that emulates SmartMedia.
 
 "%PAGE%" looks after the card:
-1. Open it in Chrome or Edge (Opera and Brave work too; Firefox and Safari cannot
+1. Open it in Chrome or Edge (Opera, Brave and Firefox 151+ work too; Safari cannot
    open USB serial ports).
 2. Take the card out of the device, press CONNECT and pick the SmartMare port.
 3. READ CARD, then SAVE CARD BACKUP keeps an exact copy of the card (.img).

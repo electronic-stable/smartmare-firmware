@@ -2,7 +2,7 @@
  * SmartMare 5V - sound editor: waveform, start and stop points, zoom and preview
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * The trim screen: an MPC-style LCD with the waveform, START / END flags, zoom, and the

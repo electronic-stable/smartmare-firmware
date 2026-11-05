@@ -13,7 +13,7 @@ new and modern features:
 - **No more hunting for rare, worn-out cards:** a new card, made today, that your gear takes
   as its own.
 - **USB-C to your computer:** the card shows up as a drive with its own editor page; no
-  software to install, it runs in Chrome or Edge.
+  software to install, it runs in Chrome or Edge (Firefox 151+ works too).
 - **Back up and restore** the whole card from the editor page, and keep as many copies as you like.
 - **On the SP-202:** see and edit your pads, copy them between banks, drop your own audio
   files on pads, trim and loop them, and keep whole sample sets on the card itself.
@@ -97,7 +97,7 @@ Then connect the card by USB-C.
   `.uf2` file onto it and the card restarts by itself. A card with no firmware at all starts
   in update mode when its BOOT pad is held to GND at power-up.
 
-The loader pages need Chrome or Edge (Opera and Brave work too): Firefox and Safari cannot
+The loader pages need Chrome or Edge (Opera, Brave and Firefox 151+ work too): Safari cannot
 open USB serial ports.
 
 ## Licence

@@ -2,7 +2,7 @@
  * SmartMare 5V - card interface: safe state, card power sense, data bus enable
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "card_if.h"

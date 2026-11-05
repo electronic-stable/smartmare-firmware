@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 loader page: pads, trims, sample sets, card read and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare SP-202 Card Manager: the page. Card model in card.js, USB in serial.js. */
@@ -764,7 +764,7 @@ function onClose() {
 }
 
 const NO_SERIAL = "This browser cannot open USB serial ports. Open this page in Chrome or Edge "
-  + "(right-click the file → Open with → Microsoft Edge). Firefox and Safari cannot.";
+  + "(right-click the file → Open with → Microsoft Edge). Firefox 151 or later works too. Safari cannot.";
 
 async function connect(port) {
   if (state.link) { if (!port) await state.link.disconnect(); return; }
@@ -1320,7 +1320,7 @@ async function start() {
   renderChecks();
   if (CardLink.supported()) check("browser", "ok", "Web Serial available");
   else {
-    check("browser", "fail", "use Chrome, Edge, Opera or Brave on a computer (Firefox and Safari cannot open USB serial ports)");
+    check("browser", "fail", "use Chrome or Edge on a computer (Opera, Brave or Firefox 151+ work too; Safari cannot open USB serial ports)");
     note(NO_SERIAL, "err");
   }
   check("usb", "wait", "press CONNECT and pick the card");

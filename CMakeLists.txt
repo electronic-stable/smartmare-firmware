@@ -1,7 +1,7 @@
 # SmartMare 5V - firmware build: SP-202 and generic firmwares, self test, bring-up
 #
 # Fabien Roffet for Electronic Stable - smartmare.com
-# Version 1.2.7 - 4 Nov 2026
+# Version 1.2.8 - 5 Nov 2026
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.13)
@@ -13,7 +13,7 @@ set(PICO_BOARD smartmedia_rp2350a CACHE STRING "Board type")
 include(pico_sdk_import.cmake)
 
 # The firmware version: in the .uf2 names and the USB banner.
-project(smartmedia_fw VERSION 1.2.7 LANGUAGES C CXX ASM)
+project(smartmedia_fw VERSION 1.2.8 LANGUAGES C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 

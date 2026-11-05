@@ -2,7 +2,7 @@
  * SmartMare 5V - sample sets kept in the card's flash
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "set_store.h"

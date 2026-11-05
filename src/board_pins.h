@@ -2,7 +2,7 @@
  * SmartMare 5V - GPIO map of the card, per board version
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * GPIO map of the SmartMare card, v0.2 and v0.3.

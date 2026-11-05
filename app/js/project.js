@@ -2,7 +2,7 @@
  * SmartMare 5V - sample sets: the whole work in one .smartmare file
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.7 - 4 Nov 2026
+ * Version 1.2.8 - 5 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Sample sets: the whole work in one file. A set keeps the card image being edited
