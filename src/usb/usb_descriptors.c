@@ -2,7 +2,7 @@
  * SmartMare 5V - USB descriptors: serial port, picotool reset, drive
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.8 - 5 Nov 2026
+ * Version 1.2.9 - 10 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * USB descriptors of the SmartMare card: CDC serial (interfaces 0-1), the Raspberry Pi
@@ -59,7 +59,7 @@ static char serial_str[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
 static const char *const strings[] = {
     [STR_MANUF] = "Electronic Stable",
 #if SMARTMARE_GENERIC
-    [STR_PRODUCT] = "SmartMare 5V Generic",
+    [STR_PRODUCT] = "SmartMare 5V DevKit",
 #else
     [STR_PRODUCT] = "SmartMare 5V SP-202",
 #endif

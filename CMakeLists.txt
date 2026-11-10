@@ -1,7 +1,7 @@
 # SmartMare 5V - firmware build: SP-202 and generic firmwares, self test, bring-up
 #
 # Fabien Roffet for Electronic Stable - smartmare.com
-# Version 1.2.8 - 5 Nov 2026
+# Version 1.2.9 - 10 Nov 2026
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.13)
@@ -13,7 +13,7 @@ set(PICO_BOARD smartmedia_rp2350a CACHE STRING "Board type")
 include(pico_sdk_import.cmake)
 
 # The firmware version: in the .uf2 names and the USB banner.
-project(smartmedia_fw VERSION 1.2.8 LANGUAGES C CXX ASM)
+project(smartmedia_fw VERSION 1.2.9 LANGUAGES C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -84,11 +84,11 @@ set(GENERIC_FILES ${CMAKE_CURRENT_LIST_DIR}/app/generic_loader.html ${CMAKE_CURR
     ${CMAKE_CURRENT_LIST_DIR}/app/js/segments.js ${CMAKE_CURRENT_LIST_DIR}/app/js/firmware.js ${CMAKE_CURRENT_LIST_DIR}/app/js/update.js
     ${CMAKE_CURRENT_LIST_DIR}/app/js/generic.js)
 add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/drive_files_generic.c ${CMAKE_BINARY_DIR}/smartmare-generic-card-manager-v${PROJECT_VERSION}.html
+    OUTPUT ${CMAKE_BINARY_DIR}/drive_files_generic.c ${CMAKE_BINARY_DIR}/smartmare-devkit-card-manager-v${PROJECT_VERSION}.html
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/tools/build_drive.py ${CMAKE_BINARY_DIR}/drive_files_generic.c
-            --generic --html ${CMAKE_BINARY_DIR}/smartmare-generic-card-manager-v${PROJECT_VERSION}.html
+            --generic --html ${CMAKE_BINARY_DIR}/smartmare-devkit-card-manager-v${PROJECT_VERSION}.html
     DEPENDS ${GENERIC_FILES} ${CMAKE_CURRENT_LIST_DIR}/tools/build_drive.py
-    COMMENT "Building the Generic Card Manager USB drive")
+    COMMENT "Building the DevKit Card Manager USB drive")
 add_executable(smartmedia_generic
     src/main.c src/card_if.c src/sm_core.c src/sm_flash_storage.c src/sm_bus.c
     src/crc32.c src/fw_update.c src/usb/usb_descriptors.c src/usb/usb_drive.c ${CMAKE_BINARY_DIR}/drive_files_generic.c)
@@ -107,7 +107,7 @@ target_compile_definitions(smartmedia_generic PRIVATE
     PICO_USB_RESET_SUPPORT_MS_OS_20_DESCRIPTOR=1
     PICO_USB_RESET_MS_OS_20_DESCRIPTOR_ITF=2
     PICO_USB_RESET_INCLUDE_DEFAULT_APP_DRIVER_CB=1)
-set_target_properties(smartmedia_generic PROPERTIES OUTPUT_NAME smartmare-5v-generic-firmware-v${PROJECT_VERSION})
+set_target_properties(smartmedia_generic PROPERTIES OUTPUT_NAME smartmare-5v-devkit-firmware-v${PROJECT_VERSION})
 pico_set_binary_type(smartmedia_generic copy_to_ram)
 pico_enable_stdio_usb(smartmedia_generic 1)
 pico_enable_stdio_uart(smartmedia_generic 0)

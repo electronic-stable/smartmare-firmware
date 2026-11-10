@@ -28,15 +28,15 @@ The version is set in `CMakeLists.txt` (`project(... VERSION 1.2.1 ...)`), is pa
 firmware's file name, and is shown on the card's USB serial port when it starts.
 
 ## SmartMare 5V
-A 4 MB 5 V SmartMedia card. Two firmwares, for the same card:
+Emulates a 4 MB 5 V SmartMedia card. Two firmwares, for the same card:
 
 | Firmware | For | Loader page on the card's USB drive |
 |---|---|---|
 | `smartmare-5v-sp-202-firmware-v<version>.uf2` | the BOSS SP-202: pads, sample sets, backups of banks A/B | SP-202 Card Manager (`app/sp-202_loader.html`) |
-| `smartmare-5v-generic-firmware-v<version>.uf2` | any gear with a 5 V 4 MB SmartMedia slot | Generic Card Manager (`app/generic_loader.html`) |
+| `smartmare-5v-devkit-firmware-v<version>.uf2` | the DevKit Edition: any gear with a 5 V 4 MB SmartMedia slot, not tested outside the SP-202 | DevKit Card Manager (`app/generic_loader.html`) |
 
 ## SmartMare 3.3V
-A 16 MB 3.3 V SmartMedia card, for the BOSS SP-303 and other 3.3 V gear. **Coming soon:** the
+A 3.3 V SmartMedia emulator, for the BOSS SP-303 and other 3.3 V gear. **Coming soon:** the
 board is designed, its firmware is not in this repository yet. It will follow the same names
 (`smartmare-3v3-..._v<version>.uf2`).
 
@@ -72,8 +72,8 @@ The firmwares land in `build/`:
 | File | What it is |
 |---|---|
 | `smartmare-5v-sp-202-firmware-v<version>.uf2` | SmartMare 5V, SP-202 firmware |
-| `smartmare-5v-generic-firmware-v<version>.uf2` | SmartMare 5V, generic firmware |
-| `smartmare-sp-202-card-manager-v<version>.html`, `smartmare-generic-card-manager-v<version>.html` | the Card Manager pages, as on the card |
+| `smartmare-5v-devkit-firmware-v<version>.uf2` | SmartMare 5V, DevKit firmware (named "generic" before 1.2.9) |
+| `smartmare-sp-202-card-manager-v<version>.html`, `smartmare-devkit-card-manager-v<version>.html` | the Card Manager pages, as on the card |
 | `smartmedia_selftest.uf2` | self test: checks the card against a simulated host. **It overwrites the card's memory**; load a normal firmware afterwards |
 | `smartmedia_bringup.uf2` | first power-on checks of a new board |
 

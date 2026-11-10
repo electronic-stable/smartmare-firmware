@@ -2,7 +2,7 @@
  * SmartMare 5V - generic loader page: read, back up, restore and erase the card
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.8 - 5 Nov 2026
+ * Version 1.2.9 - 10 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * SmartMare Generic Card Manager: the page of the generic card (any device with a 5 V SmartMedia

@@ -2,7 +2,7 @@
  * SmartMare 5V - the emulator: SP-202 and generic firmwares, USB commands
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.8 - 5 Nov 2026
+ * Version 1.2.9 - 10 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * SmartMedia 5V card emulator for the Boss SP-202: an S4M-5 (4 MB, ID 98h 6Bh).
@@ -239,7 +239,7 @@ static void print_status(void) {
 static void print_help(void) {
     end_line();
 #if SMARTMARE_GENERIC
-    printf("\n== SmartMare 5V generic firmware v" SMARTMARE_FW_VERSION ", SmartMedia emulator, generic 4 MB 5 V card, ID %02Xh %02Xh, clk_sys %lu MHz, board v0.%u (ALE GPIO%u, WE GPIO%u) ==\n",
+    printf("\n== SmartMare 5V DevKit firmware v" SMARTMARE_FW_VERSION ", SmartMedia emulator, DevKit 4 MB 5 V card, ID %02Xh %02Xh, clk_sys %lu MHz, board v0.%u (ALE GPIO%u, WE GPIO%u) ==\n",
            MAKER_ID, SM_DEVICE_ID, (unsigned long)(clock_get_hz(clk_sys) / 1000000), board_rev, pin_ale, pin_we_n);
     printf("keys: s = status, r = raw bus samples and wrong reads, v = log level (quiet / all / jobs), D = dump the image (B = one block again), W = write blocks (tools/write_image.py), "
            "E = erase the whole image (blank card), U/K/u = firmware update / go back / previous, h = this help\n");

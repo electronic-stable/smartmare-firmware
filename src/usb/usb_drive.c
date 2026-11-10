@@ -2,7 +2,7 @@
  * SmartMare 5V - the read-only SMARTMARE USB drive with the loader page
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.8 - 5 Nov 2026
+ * Version 1.2.9 - 10 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * The read-only SMARTMARE drive, built at run time: a FAT16 disk of 64 MB (4 KB clusters)
@@ -360,7 +360,7 @@ static void node_entry(int k, int seq) {
     switch (n->kind) {
     case N_PAGE:
 #if SMARTMARE_GENERIC
-        add_entry("smartmare-generic-card-manager-v" SMARTMARE_FW_VERSION ".html", "SMARTM~1HTM", 0x01, n->first, n->size, date, time);
+        add_entry("smartmare-devkit-card-manager-v" SMARTMARE_FW_VERSION ".html", "SMARTM~1HTM", 0x01, n->first, n->size, date, time);
 #else
         add_entry("smartmare-sp-202-card-manager-v" SMARTMARE_FW_VERSION ".html", "SMARTM~1HTM", 0x01, n->first, n->size, date, time);
 #endif

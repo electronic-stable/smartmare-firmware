@@ -2,7 +2,7 @@
 SmartMare 5V - packs the loader page into the firmware's USB drive
 
 Fabien Roffet for Electronic Stable - smartmare.com
-Version 1.2.8 - 5 Nov 2026
+Version 1.2.9 - 10 Nov 2026
 SPDX-License-Identifier: GPL-3.0-or-later
 
 The files of the SmartMare USB drive: the card manager page in one HTML file, and a README.
@@ -25,7 +25,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 APP = os.path.join(ROOT, "app")
 VERSION = re.search(r"project\([^)]*VERSION (\d+\.\d+\.\d+)", open(os.path.join(ROOT, "CMakeLists.txt"), encoding="utf8").read()).group(1)
 SP202_PAGE = f"smartmare-sp-202-card-manager-v{VERSION}.html"
-GENERIC_PAGE = f"smartmare-generic-card-manager-v{VERSION}.html"
+GENERIC_PAGE = f"smartmare-devkit-card-manager-v{VERSION}.html"
 
 LICENCES = """Open source: the card's firmware is free software under the GNU General Public
 License v3 or later, and this page is under the MIT licence. Both come with no
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out_c")
     ap.add_argument("--html", help="also write the single-file page here")
-    ap.add_argument("--generic", action="store_true", help="the generic card: Generic Card Manager (app/generic_loader.html)")
+    ap.add_argument("--generic", action="store_true", help="the DevKit card: DevKit Card Manager (app/generic_loader.html)")
     a = ap.parse_args()
     page = single_html("generic_loader.html" if a.generic else "sp-202_loader.html")
     readme = (README_GENERIC if a.generic else README).replace("%PAGE%", GENERIC_PAGE if a.generic else SP202_PAGE)
