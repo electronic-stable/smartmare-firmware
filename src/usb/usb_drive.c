@@ -2,7 +2,7 @@
  * SmartMare 5V - the read-only SMARTMARE USB drive with the loader page
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.9 - 10 Nov 2026
+ * Version 1.3.0 - 17 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * The read-only SMARTMARE drive, built at run time: a FAT16 disk of 64 MB (4 KB clusters)
@@ -723,9 +723,9 @@ static void read_sector(uint32_t lba, uint8_t *out) {
 // ---------- TinyUSB MSC callbacks ----------
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
     (void)lun;
-    memcpy(vendor_id, "DHE     ", 8);
+    memcpy(vendor_id, "ESTABLE ", 8);   // Electronic Stable
     memcpy(product_id, "SmartMare drive ", 16);
-    memcpy(product_rev, "1.1 ", 4);
+    memcpy(product_rev, "1.3 ", 4);
 }
 
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {

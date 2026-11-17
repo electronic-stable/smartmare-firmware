@@ -3,7 +3,7 @@
   SmartMare 5V - SP-202 loader: pads, sample sets and backup bank over USB
 
   Fabien Roffet for Electronic Stable - smartmare.com
-  Version 1.2.9 - 10 Nov 2026
+  Version 1.3.0 - 17 Nov 2026
   SPDX-License-Identifier: MIT
 -->
 <html lang="en">
@@ -228,7 +228,10 @@
         <label><input type="checkbox" id="log-scroll" checked> follow</label>
         <button class="key small act" id="btn-logclear">CLEAR</button>
       </span></header>
-    <div id="log" class="log-body" role="log"></div>
+    <details class="checks-box log-box" id="log-box">
+      <summary>Show the log</summary>
+      <div id="log" class="log-body" role="log"></div>
+    </details>
   </section>
 
   <footer class="foot">SmartMare by Electronic Stable. SmartMedia is a trademark of Toshiba; Roland and BOSS are trademarks of Roland Corporation. SmartMare and Electronic Stable are not affiliated with them.</footer>
@@ -253,6 +256,7 @@
     <div id="dlg-body"></div>
     <menu>
       <button value="cancel" class="key small act" id="dlg-cancel">CANCEL</button>
+      <button value="extra" class="key small act" id="dlg-extra" hidden></button>
       <button value="ok" class="key small act" id="dlg-ok">OK</button>
     </menu>
   </form>

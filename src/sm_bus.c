@@ -2,7 +2,7 @@
  * SmartMare 5V - SmartMedia bus engine: PIO, DMA and core1
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.9 - 10 Nov 2026
+ * Version 1.3.0 - 17 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "sm_bus.h"

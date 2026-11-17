@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 sample codec: decodes and encodes pad audio
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.9 - 10 Nov 2026
+ * Version 1.3.0 - 17 Nov 2026
  * SPDX-License-Identifier: MIT
  *
  * Frames of 4 bytes = 8 samples, big-endian words, in pairs (A, B). The top bits of the

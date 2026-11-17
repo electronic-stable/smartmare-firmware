@@ -2,7 +2,7 @@
  * SmartMare 5V - the 4 MB SmartMedia image in the W25Q128 flash
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.9 - 10 Nov 2026
+ * Version 1.3.0 - 17 Nov 2026
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "sm_flash_storage.h"

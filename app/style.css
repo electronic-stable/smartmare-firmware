@@ -2,7 +2,7 @@
  * SmartMare 5V - style of the loader pages
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.9 - 10 Nov 2026
+ * Version 1.3.0 - 17 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare card pages (Pad Editor, Card Manager): a light theme, like the website.
@@ -131,6 +131,8 @@ body {
 .checks-box summary { cursor: pointer; font-size: 11px; letter-spacing: .14em; color: var(--silk-dim); text-transform: uppercase; }
 .checks-box summary span { letter-spacing: .04em; text-transform: none; margin-left: 6px; }
 .checks-box summary span.bad { color: var(--fail); }
+.log-box { margin: 0; border-top: 0; padding: 8px 14px; }
+.log-box .log-body { padding: 8px 0 0; }
 .backup-status { font-size: 12px; margin-bottom: 10px; }
 .backup-status b { color: var(--ok); }
 .backup-status .bad { color: var(--warn); }

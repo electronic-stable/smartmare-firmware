@@ -2,7 +2,7 @@
  * SmartMare 5V - SP-202 loader page: pads, trims, sample sets, card read and write
  *
  * Fabien Roffet for Electronic Stable - smartmare.com
- * Version 1.2.9 - 10 Nov 2026
+ * Version 1.3.0 - 17 Nov 2026
  * SPDX-License-Identifier: MIT
  */
 /* SmartMare SP-202 Card Manager: the page. Card model in card.js, USB in serial.js. */
@@ -846,6 +846,18 @@ async function writeCard() {
     if (!blocks.length) { note("Nothing to write: the card already holds this image.", "ok"); return; }
     const backup = blocks.some(b => b >= SM.BACKUP_BLOCK);
     state.busy = false;
+    const lost = losses();
+    if (lost.length) {
+      const r = await choose("This removes sounds from the card",
+        `<p>The card holds sounds that this image does not.</p><ul>${lost.map(x => `<li>${x}</li>`).join("")}</ul>
+         <p>Save a copy of the card on your computer first? You can put it back with OPEN, then WRITE CARD.</p>`,
+        "WRITE ANYWAY", "SAVE A COPY FIRST");
+      if (r === "cancel") return;
+      if (r === "extra") {
+        download(state.base.img, `${projName()}-card-before-write-${new Date().toISOString().slice(0, 10)}.img`);
+        log("copy of the card saved before writing", "info");
+      }
+    }
     const ok = await ask("Write to the card?",
       `<p>${blocks.length} block${blocks.length > 1 ? "s" : ""} will be erased and written: ${describeBlocks(blocks)}.</p>
        <p>Keep the SP-202 off until it is done.${backup ? " Then load banks A/B into the SP-202 with its BACKUP LOAD." : ""}</p>`, "WRITE");
@@ -1104,12 +1116,40 @@ async function showProjects() {
 
 // ---------- dialog ----------
 function ask(title, html, okText = "OK") {
+  return choose(title, html, okText).then(r => r === "ok");
+}
+
+// Like ask, with a third button (extraText): resolves "ok", "extra" or "cancel".
+function choose(title, html, okText = "OK", extraText = "") {
   const d = $("dialog");
   $("dlg-title").textContent = title;
   $("dlg-body").innerHTML = html;
   $("dlg-ok").textContent = okText;
+  $("dlg-extra").textContent = extraText;
+  $("dlg-extra").hidden = !extraText;
+  d.returnValue = "cancel";
   d.showModal();
-  return new Promise(res => d.addEventListener("close", () => res(d.returnValue === "ok"), { once: true }));
+  return new Promise(res => d.addEventListener("close", () => res(d.returnValue || "cancel"), { once: true }));
+}
+
+// What a write would take off the card: pads of banks C/D that the card holds and the page does
+// not (or holds a different sound on), and the A/B backup when the page has none. A sample set
+// replaces the whole card, so loading one and writing it removes everything it does not hold.
+function losses() {
+  if (!state.base || !state.work) return [];
+  const removed = [], replaced = [], esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const was = new SM.Space(state.base, "card"), now = new SM.Space(state.work, "card");
+  if (was.present()) {
+    const keep = new Map(now.present() ? now.used().map(e => [e.name, sampleKey(now.sample(e))]) : []);
+    for (const e of was.used()) {
+      const key = sampleKey(was.sample(e)), title = padNames[key] ? ` (${esc(padNames[key])})` : "";
+      if (!keep.has(e.name)) removed.push(`<b>${e.name}</b>${title}`);
+      else if (keep.get(e.name) !== key) replaced.push(`<b>${e.name}</b>${title}`);
+    }
+  }
+  const bk = new SM.Space(state.base, "backup");
+  if (bk.present() && !new SM.Space(state.work, "backup").present()) removed.push("<b>the SP-202 backup (banks A/B)</b>");
+  return [removed.length && `Removed: ${removed.join(", ")}`, replaced.length && `Replaced by another sound: ${replaced.join(", ")}`].filter(Boolean);
 }
 
 // ---------- events ----------
